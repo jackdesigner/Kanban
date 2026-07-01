@@ -2,13 +2,14 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { DragDropContext } from '@hello-pangea/dnd';
-import { loadBoard, saveBoard, exportBoardAsJSON } from '@/lib/storage';
+import { exportBoardAsJSON } from '@/lib/storage';
 import { createEmptyBoard } from '@/lib/initialData';
+import { supabase } from '@/lib/supabaseClient';
 import KanbanColumn from './KanbanColumn';
 
 const FILTERS = [
-  { key: 'all',     label: 'Todos' },
-  { key: 'eu',      label: 'Eu' },
+  { key: 'all', label: 'Todos' },
+  { key: 'eu', label: 'Eu' },
   { key: 'cliente', label: 'Cliente' },
   { key: 'interno', label: 'Interno' },
 ];
@@ -17,19 +18,61 @@ export default function KanbanBoard() {
   const [board, setBoard] = useState(null);
   const [filter, setFilter] = useState('all');
 
-  /* Carrega do banco de dados na montagem */
+  /* Carrega direto do Supabase ao abrir o site e assina as mudanças em tempo real */
   useEffect(() => {
     async function initBoard() {
-      const saved = await loadBoard();
-      setBoard(saved || createEmptyBoard());
+      try {
+        const { data, error } = await supabase
+          .from('board_state')
+          .select('data')
+          .eq('id', 1)
+          .single();
+
+        if (error) throw error;
+
+        if (data && data.data && Object.keys(data.data).length > 0) {
+          setBoard(data.data);
+        } else {
+          setBoard(createEmptyBoard());
+        }
+      } catch (err) {
+        console.error('Erro ao carregar dados do Supabase:', err);
+        setBoard(createEmptyBoard());
+      }
     }
     initBoard();
+
+    /* Assina as atualizações em tempo real do banco de dados */
+    const subscription = supabase
+      .channel('board-updates')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'board_state', filter: 'id=eq.1' },
+        (payload) => {
+          if (payload.new && payload.new.data) {
+            setBoard(payload.new.data);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(subscription);
+    };
   }, []);
 
-  /* Persiste sempre que o board muda */
-  useEffect(() => {
-    if (board) saveBoard(board);
-  }, [board]);
+  /* Função auxiliar para salvar na nuvem */
+  async function persistirNoSupabase(novoBoard) {
+    try {
+      const { error } = await supabase
+        .from('board_state')
+        .upsert({ id: 1, data: novoBoard, updated_at: new Date().toISOString() });
+
+      if (error) throw error;
+    } catch (err) {
+      console.error('Erro ao salvar no Supabase:', err);
+    }
+  }
 
   /* Drag and drop */
   const onDragEnd = useCallback((result) => {
@@ -48,7 +91,6 @@ export default function KanbanBoard() {
       srcCol.cardIds.splice(source.index, 1);
       dstCol.cardIds.splice(destination.index, 0, draggableId);
 
-      // Ao mover de coluna, atualiza owner do card para o owner padrão da coluna destino
       if (source.droppableId !== destination.droppableId) {
         next.cards = {
           ...next.cards,
@@ -59,34 +101,43 @@ export default function KanbanBoard() {
       next.columns[source.droppableId] = srcCol;
       next.columns[destination.droppableId] = dstCol;
 
+      persistirNoSupabase(next);
       return next;
     });
   }, []);
 
   /* CRUD de cards */
   function handleAddCard(colId, card) {
-    setBoard((prev) => ({
-      ...prev,
-      cards: { ...prev.cards, [card.id]: card },
-      columns: {
-        ...prev.columns,
-        [colId]: { ...prev.columns[colId], cardIds: [...prev.columns[colId].cardIds, card.id] },
-      },
-    }));
+    setBoard((prev) => {
+      const next = {
+        ...prev,
+        cards: { ...prev.cards, [card.id]: card },
+        columns: {
+          ...prev.columns,
+          [colId]: { ...prev.columns[colId], cardIds: [...prev.columns[colId].cardIds, card.id] },
+        },
+      };
+      persistirNoSupabase(next);
+      return next;
+    });
   }
 
   function handleUpdateCard(updated) {
-    setBoard((prev) => ({
-      ...prev,
-      cards: { ...prev.cards, [updated.id]: updated },
-    }));
+    setBoard((prev) => {
+      const next = {
+        ...prev,
+        cards: { ...prev.cards, [updated.id]: updated },
+      };
+      persistirNoSupabase(next);
+      return next;
+    });
   }
 
   function handleDeleteCard(colId, cardId) {
     setBoard((prev) => {
       const cards = { ...prev.cards };
       delete cards[cardId];
-      return {
+      const next = {
         ...prev,
         cards,
         columns: {
@@ -97,22 +148,25 @@ export default function KanbanBoard() {
           },
         },
       };
+      persistirNoSupabase(next);
+      return next;
     });
   }
 
   function handleReset() {
     if (confirm('Limpar todo o board? Esta ação não pode ser desfeita.')) {
-      setBoard(createEmptyBoard());
+      const boardVazio = createEmptyBoard();
+      setBoard(boardVazio);
+      persistirNoSupabase(boardVazio);
     }
   }
 
-  if (!board) return <div style={{ padding: 32, color: 'var(--gray-500)' }}>Carregando…</div>;
+  if (!board) return <div style={{ padding: 32, color: 'var(--gray-500)' }}>Carregando do Supabase…</div>;
 
   const totalCards = Object.keys(board.cards).length;
 
   return (
     <div className="app">
-      {/* Topbar */}
       <header className="topbar">
         <div className="topbar__brand">
           <span className="bracket">[</span>
@@ -122,7 +176,6 @@ export default function KanbanBoard() {
         </div>
 
         <div className="topbar__actions">
-          {/* Filtro por owner */}
           <div className="filter-group" role="group" aria-label="Filtrar por responsável">
             {FILTERS.map((f) => (
               <button
@@ -144,7 +197,6 @@ export default function KanbanBoard() {
         </div>
       </header>
 
-      {/* Board */}
       <main className="board">
         <DragDropContext onDragEnd={onDragEnd}>
           <div className="board__track">
