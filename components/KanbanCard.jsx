@@ -13,12 +13,23 @@ export default function KanbanCard({ card, onClick }) {
   const ownerKey = card.owner || 'eu';
   const ownerLabel = OWNER_LABELS[ownerKey];
 
+  // Primeiro nome do responsável/cliente
+  const firstName = card.clientName ? card.clientName.trim().split(/\s+/)[0] : '';
+
   return (
     <div className="card" onClick={onClick} role="button" tabIndex={0}
       onKeyDown={(e) => e.key === 'Enter' && onClick()}>
 
-      <div className={`card__title${!card.title ? ' is-empty' : ''}`}>
-        {card.title || 'sem título'}
+      {/* Título + primeiro nome */}
+      <div className="card__title-row">
+        <div className={`card__title${!card.title ? ' is-empty' : ''}`}>
+          {card.title || 'sem título'}
+        </div>
+        {firstName && (
+          <span className="card__client-name" title={card.clientName}>
+            {firstName}
+          </span>
+        )}
       </div>
 
       <div className="card__meta">
@@ -36,6 +47,13 @@ export default function KanbanCard({ card, onClick }) {
         {card.dueDate && (
           <span className={`tag tag--due status-${status}`}>
             {formatDate(card.dueDate)} · {daysLabel(card.dueDate)}
+          </span>
+        )}
+
+        {/* Cidade/Estado */}
+        {card.cityState && (
+          <span className="tag" title={card.cityState}>
+            📍 {card.cityState}
           </span>
         )}
       </div>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { OWNER_LABELS } from '@/lib/initialData';
 
 /* -------- helpers -------- */
@@ -8,7 +8,7 @@ function uid() {
   return `item-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 }
 
-/* -------- sub-componentes -------- */
+/* -------- ListEditor -------- */
 function ListEditor({ label, items, onChange }) {
   function updateText(id, text) {
     onChange(items.map((i) => (i.id === id ? { ...i, text } : i)));
@@ -49,9 +49,189 @@ function ListEditor({ label, items, onChange }) {
   );
 }
 
+/* -------- EmailsEditor -------- */
+function EmailsEditor({ emails, onChange }) {
+  const [copied, setCopied] = useState(false);
+
+  function updateEmail(idx, value) {
+    const next = [...emails];
+    next[idx] = value;
+    onChange(next);
+  }
+  function removeEmail(idx) {
+    onChange(emails.filter((_, i) => i !== idx));
+  }
+  function addEmail() {
+    onChange([...emails, '']);
+  }
+  function copyAll() {
+    const valid = emails.filter((e) => e.trim());
+    if (!valid.length) return;
+    navigator.clipboard.writeText(valid.join(', ')).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
+
+  return (
+    <div className="field">
+      <span className="field__label">E-mails</span>
+      <div className="emails-editor">
+        {emails.map((email, idx) => (
+          <div key={idx} className="emails-editor__item">
+            <input
+              type="text"
+              value={email}
+              placeholder="email@exemplo.com"
+              onChange={(e) => updateEmail(idx, e.target.value)}
+            />
+            <button className="icon-btn" onClick={() => removeEmail(idx)} title="Remover">×</button>
+          </div>
+        ))}
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button className="list-editor__add" onClick={addEmail}>+ e-mail</button>
+          {emails.some((e) => e.trim()) && (
+            <button
+              className={`emails-copy-btn${copied ? ' copied' : ''}`}
+              onClick={copyAll}
+              title="Copiar todos os e-mails separados por vírgula"
+            >
+              {copied ? '✓ Copiado!' : '⎘ Copiar todos'}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* -------- CidadeEstadoPicker -------- */
+function CidadeEstadoPicker({ value, onChange }) {
+  const [query, setQuery] = useState(value || '');
+  const [results, setResults] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [open, setOpen] = useState(false);
+  const cacheRef = useRef(null);
+  const timerRef = useRef(null);
+  const wrapRef = useRef(null);
+
+  // Fecha dropdown ao clicar fora
+  useEffect(() => {
+    function handleClick(e) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  async function fetchCidades(q) {
+    if (q.length < 2) { setResults([]); setOpen(false); return; }
+    setLoading(true);
+    setOpen(true);
+    try {
+      // Carrega todos na primeira vez e cacheia
+      if (!cacheRef.current) {
+        const res = await fetch('https://servicodados.ibge.gov.br/api/v1/localidades/municipios?orderBy=nome');
+        const data = await res.json();
+        cacheRef.current = data.map((m) => ({
+          label: `${m.nome} – ${m.microrregiao.mesorregiao.UF.sigla}`,
+          nome: m.nome,
+        }));
+      }
+      const lower = q.toLowerCase();
+      const filtered = cacheRef.current
+        .filter((m) => m.nome.toLowerCase().startsWith(lower))
+        .slice(0, 30);
+      setResults(filtered);
+    } catch {
+      setResults([]);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function handleInput(e) {
+    const q = e.target.value;
+    setQuery(q);
+    clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => fetchCidades(q), 250);
+  }
+
+  function handleSelect(label) {
+    setQuery(label);
+    onChange(label);
+    setOpen(false);
+    setResults([]);
+  }
+
+  function handleBlur() {
+    // Se o usuário digitou algo diferente do valor salvo, salva o que está escrito
+    if (query !== value) onChange(query);
+  }
+
+  return (
+    <div className="field">
+      <span className="field__label">Cidade / Estado</span>
+      <div className="city-picker" ref={wrapRef}>
+        <input
+          className="city-picker__input"
+          type="text"
+          value={query}
+          onChange={handleInput}
+          onBlur={handleBlur}
+          onFocus={() => { if (query.length >= 2) setOpen(true); }}
+          placeholder="Digite a cidade…"
+          autoComplete="off"
+        />
+        {open && (
+          <div className="city-picker__dropdown">
+            {loading && <div className="city-picker__loading">Carregando…</div>}
+            {!loading && results.length === 0 && query.length >= 2 && (
+              <div className="city-picker__empty">Nenhuma cidade encontrada</div>
+            )}
+            {results.map((r) => (
+              <div
+                key={r.label}
+                className="city-picker__option"
+                onMouseDown={() => handleSelect(r.label)}
+              >
+                {r.label}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /* -------- Modal principal -------- */
 export default function CardModal({ card, columnTitle, onClose, onSave, onDelete }) {
-  const [draft, setDraft] = useState({ ...card });
+  const [draft, setDraft] = useState({
+    clientName: '',
+    emails: [],
+    cityState: '',
+    ...card,
+  });
+
+  // Salvar e fechar — sempre salva o draft atual
+  const saveAndClose = useCallback(() => {
+    onSave(draft);
+  }, [draft, onSave]);
+
+  // ESC fecha e salva
+  useEffect(() => {
+    function handleKey(e) {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        saveAndClose();
+      }
+    }
+    document.addEventListener('keydown', handleKey, true);
+    return () => document.removeEventListener('keydown', handleKey, true);
+  }, [saveAndClose]);
 
   function set(field, value) {
     setDraft((d) => ({ ...d, [field]: value }));
@@ -61,8 +241,9 @@ export default function CardModal({ card, columnTitle, onClose, onSave, onDelete
     setDraft((d) => ({ ...d, tags: { ...d.tags, [key]: value } }));
   }
 
+  // Clique no overlay → salva e fecha
   function handleOverlayClick(e) {
-    if (e.target === e.currentTarget) onClose();
+    if (e.target === e.currentTarget) saveAndClose();
   }
 
   return (
@@ -71,10 +252,8 @@ export default function CardModal({ card, columnTitle, onClose, onSave, onDelete
 
         {/* Header */}
         <div className="modal__header">
-          <span className="modal__header-label">
-            {columnTitle}
-          </span>
-          <button className="icon-btn" onClick={onClose} title="Fechar">×</button>
+          <span className="modal__header-label">{columnTitle}</span>
+          <button className="icon-btn" onClick={saveAndClose} title="Fechar (salva automaticamente)">×</button>
         </div>
 
         {/* Body */}
@@ -94,22 +273,17 @@ export default function CardModal({ card, columnTitle, onClose, onSave, onDelete
 
           <hr className="section-divider" />
 
-          {/* Owner + Due date */}
+          {/* Responsável (cliente) + Cidade/Estado */}
           <div className="two-col">
             <div className="field">
-              <span className="field__label">Responsável</span>
-              <div className="owner-select-row">
-                {Object.entries(OWNER_LABELS).map(([key, { text }]) => (
-                  <button
-                    key={key}
-                    className={`owner-option${draft.owner === key ? ' selected' : ''}`}
-                    onClick={() => set('owner', key)}
-                    type="button"
-                  >
-                    {text}
-                  </button>
-                ))}
-              </div>
+              <label className="field__label" htmlFor="modal-client-name">Responsável</label>
+              <input
+                id="modal-client-name"
+                type="text"
+                value={draft.clientName || ''}
+                onChange={(e) => set('clientName', e.target.value)}
+                placeholder="Nome do responsável…"
+              />
             </div>
 
             <div className="field">
@@ -123,9 +297,40 @@ export default function CardModal({ card, columnTitle, onClose, onSave, onDelete
             </div>
           </div>
 
+          {/* E-mails */}
+          <EmailsEditor
+            emails={draft.emails || []}
+            onChange={(v) => set('emails', v)}
+          />
+
+          {/* Cidade / Estado */}
+          <CidadeEstadoPicker
+            value={draft.cityState || ''}
+            onChange={(v) => set('cityState', v)}
+          />
+
           <hr className="section-divider" />
 
-          {/* Notas / descrição */}
+          {/* Owner */}
+          <div className="field">
+            <span className="field__label">Etapa / Responsável</span>
+            <div className="owner-select-row">
+              {Object.entries(OWNER_LABELS).map(([key, { text }]) => (
+                <button
+                  key={key}
+                  className={`owner-option${draft.owner === key ? ' selected' : ''}`}
+                  onClick={() => set('owner', key)}
+                  type="button"
+                >
+                  {text}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <hr className="section-divider" />
+
+          {/* Notas */}
           <div className="field">
             <label className="field__label">Notas</label>
             <textarea
@@ -178,12 +383,9 @@ export default function CardModal({ card, columnTitle, onClose, onSave, onDelete
           <button className="btn btn--danger btn--sm" onClick={onDelete}>
             Excluir card
           </button>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button className="btn btn--sm" onClick={onClose}>Cancelar</button>
-            <button className="btn btn--primary btn--sm" onClick={() => onSave(draft)}>
-              Salvar
-            </button>
-          </div>
+          <button className="btn btn--primary btn--sm" onClick={saveAndClose}>
+            Salvar e fechar
+          </button>
         </div>
 
       </div>
