@@ -17,5 +17,11 @@
   "devDependencies": {
     "eslint": "^9",
     "eslint-config-next": "^15.3.0"
+  },
+  "overrides": {
+    "@hello-pangea/dnd": {
+      "react": "$react",
+      "react-dom": "$react-dom"
+    }
   }
 }
