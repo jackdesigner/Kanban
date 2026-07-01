@@ -17,10 +17,13 @@ export default function KanbanBoard() {
   const [board, setBoard] = useState(null);
   const [filter, setFilter] = useState('all');
 
-  /* Carrega do localStorage na montagem */
+  /* Carrega do banco de dados na montagem */
   useEffect(() => {
-    const saved = loadBoard();
-    setBoard(saved || createEmptyBoard());
+    async function initBoard() {
+      const saved = await loadBoard();
+      setBoard(saved || createEmptyBoard());
+    }
+    initBoard();
   }, []);
 
   /* Persiste sempre que o board muda */

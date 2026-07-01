@@ -1,19 +1,46 @@
-const STORAGE_KEY = 'design-kanban-board-v1';
+import { supabase } from '@/lib/supabase';
 
-export function loadBoard() {
+export async function loadBoard() {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    return JSON.parse(raw);
+    const { data, error } = await supabase
+      .from('board_state')
+      .select('data')
+      .eq('id', 1)
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') {
+        // No row found, return null to initialize empty board
+        return null;
+      }
+      console.error('Falha ao carregar board do Supabase:', error);
+      return null;
+    }
+
+    if (!data || !data.data || Object.keys(data.data).length === 0) {
+      return null;
+    }
+
+    return data.data;
   } catch (err) {
-    console.error('Falha ao carregar board salvo:', err);
+    console.error('Erro ao carregar board salvo:', err);
     return null;
   }
 }
 
-export function saveBoard(board) {
+export async function saveBoard(board) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(board));
+    const { error } = await supabase
+      .from('board_state')
+      .update({ data: board, updated_at: new Date().toISOString() })
+      .eq('id', 1);
+
+    if (error) {
+      // If the row doesn't exist yet, we insert it
+      await supabase
+        .from('board_state')
+        .insert([{ id: 1, data: board }]);
+    }
   } catch (err) {
     console.error('Falha ao salvar board:', err);
   }
