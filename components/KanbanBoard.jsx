@@ -32,23 +32,6 @@ const THEME_COLORS = {
   mario:   ['#e52521', '#0064ce', '#fbd000'],
 };
 
-/* ---- Ícones SVG inline ---- */
-function IconKanban() {
-  return (
-    <svg viewBox="0 0 16 16"><rect x="1" y="1" width="4" height="14" rx="1"/><rect x="6" y="1" width="4" height="10" rx="1"/><rect x="11" y="1" width="4" height="12" rx="1"/></svg>
-  );
-}
-function IconList() {
-  return (
-    <svg viewBox="0 0 16 16"><line x1="2" y1="4" x2="14" y2="4"/><line x1="2" y1="8" x2="14" y2="8"/><line x1="2" y1="12" x2="14" y2="12"/></svg>
-  );
-}
-function IconOverview() {
-  return (
-    <svg viewBox="0 0 16 16"><rect x="1" y="1" width="6" height="6" rx="1"/><rect x="9" y="1" width="6" height="6" rx="1"/><rect x="1" y="9" width="6" height="6" rx="1"/><rect x="9" y="9" width="6" height="6" rx="1"/></svg>
-  );
-}
-
 /* ---- Scroll automático durante drag ---- */
 const SCROLL_ZONE = 100; // px desde as bordas da tela
 const SCROLL_SPEED = 14;
@@ -314,6 +297,7 @@ export default function KanbanBoard() {
   function closeListModal() {
     setListModalCard(null);
     setListModalColId(null);
+    setListModalMode('view');
   }
 
   const activeCards = Object.values(board.cards).filter((c) => !c.archived);
@@ -419,7 +403,7 @@ export default function KanbanBoard() {
               title="Kanban"
               aria-label="Kanban"
             >
-              <IconKanban />
+              <MaterialIcon name="view_kanban" size={14} />
               <span className="view-btn__label">Kanban</span>
             </button>
             <button
@@ -428,7 +412,7 @@ export default function KanbanBoard() {
               title="Lista"
               aria-label="Lista"
             >
-              <IconList />
+              <MaterialIcon name="view_list" size={14} />
               <span className="view-btn__label">Lista</span>
             </button>
             <button
@@ -437,7 +421,7 @@ export default function KanbanBoard() {
               title="Visão geral"
               aria-label="Overview"
             >
-              <IconOverview />
+              <MaterialIcon name="grid_view" size={14} />
               <span className="view-btn__label">Overview</span>
             </button>
           </div>
@@ -628,7 +612,7 @@ export default function KanbanBoard() {
     );
   }
 
-  /* ---- VIEW: OVERVIEW (2 linhas × 7 colunas) ---- */
+  /* ---- VIEW: OVERVIEW ---- */
   if (viewMode === 'overview') {
     const cols = board.columnOrder.map((colId) => {
       const col = board.columns[colId];
@@ -640,41 +624,36 @@ export default function KanbanBoard() {
       return { col, cards };
     });
 
-    // Divide em 2 linhas de 7
-    const row1 = cols.slice(0, 7);
-    const row2 = cols.slice(7);
-
     return (
       <div className="app">
         {topbar}
         <main className="board--overview">
-          {[row1, row2].map((row, ri) => (
-            <div key={ri} className="overview-grid" style={{ marginBottom: 8 }}>
-              {row.map(({ col, cards }) => (
-                <div key={col.id} className="overview-col">
-                  <div className="overview-col__header">
-                    <span className="overview-col__title">{col.title}</span>
-                    <span className="overview-col__count">{cards.length}</span>
-                  </div>
-                  <div className="overview-col__body">
-                    {cards.map((card) => (
-                      <div
-                        key={card.id}
-                        className="overview-card"
-                        title={card.title || 'sem título'}
-                        onClick={() => openListModal(card, col.id)}
-                      >
-                        {card.title || 'sem título'}
-                      </div>
-                    ))}
-                    <button className="overview-add" onClick={() => handleAddCardInView(col.id)}>
-                      + novo
-                    </button>
-                  </div>
+          <div className="overview-grid">
+            {cols.map(({ col, cards }) => (
+              <div key={col.id} className="overview-col">
+                <div className="overview-col__header">
+                  <span className="overview-col__title">{col.title}</span>
+                  <span className="overview-col__count">{cards.length}</span>
                 </div>
-              ))}
-            </div>
-          ))}
+                <div className="overview-col__body">
+                  {cards.map((card) => (
+                    <div
+                      key={card.id}
+                      className="overview-card"
+                      title={card.title || 'sem título'}
+                      onClick={() => openListModal(card, col.id)}
+                    >
+                      {card.title || 'sem título'}
+                    </div>
+                  ))}
+                  <button className="overview-add" onClick={() => handleAddCardInView(col.id)}>
+                    <MaterialIcon name="add" size={10} />
+                    novo
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
 
           {/* Modal compartilhado da view overview */}
           {listModalCard && listModalColId && (

@@ -381,6 +381,17 @@ export default function CardModal({
 
   const isView = mode === 'view';
 
+  useEffect(() => {
+    setMode(initialMode);
+    setDraft({
+      clientName: '',
+      emails: [],
+      cityState: '',
+      contactLogs: [],
+      ...card,
+    });
+  }, [card.id, initialMode]);
+
   const saveAndClose = useCallback(() => {
     onSave(draft);
   }, [draft, onSave]);
@@ -449,7 +460,7 @@ export default function CardModal({
                 onClick={isView ? onClose : () => setMode('view')}
                 title={isView ? 'Fechar' : 'Voltar à visualização'}
               >
-                <MaterialIcon name="close" size={18} />
+                <MaterialIcon name={isView ? 'close' : 'arrow_back'} size={18} />
               </button>
             </div>
           </div>

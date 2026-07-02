@@ -362,6 +362,11 @@ button { cursor: pointer; }
   color: var(--text-on-accent);
 }
 
+.view-btn svg,
+.view-btn .material-icon {
+  flex-shrink: 0;
+}
+
 .view-btn svg {
   width: 13px;
   height: 13px;
@@ -392,6 +397,10 @@ button { cursor: pointer; }
   transition: background 0.12s ease;
 }
 .actions-menu__trigger:hover { background: var(--bg-app); }
+
+.actions-menu__trigger--icon {
+  padding: 5px 8px;
+}
 
 .actions-menu__panel {
   position: absolute;
@@ -584,8 +593,9 @@ button { cursor: pointer; }
 
 .overview-grid {
   display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 140px), 1fr));
   gap: 8px;
+  align-items: stretch;
 }
 
 .overview-col {
@@ -659,7 +669,9 @@ button { cursor: pointer; }
   border-radius: var(--radius-sm);
   background: transparent;
   width: calc(100% - 8px);
-  text-align: left;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
   cursor: pointer;
   transition: background 0.1s;
 }
@@ -720,24 +732,12 @@ button { cursor: pointer; }
 }
 
 .column__info-icon {
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  border: 1.5px solid var(--text-muted);
   color: var(--text-muted);
-  font-size: 9px;
-  font-style: normal;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  line-height: 1;
-  transition: border-color 0.1s, color 0.1s;
+  transition: color 0.1s;
   user-select: none;
 }
 
 .column__info:hover .column__info-icon {
-  border-color: var(--border-focus);
   color: var(--border-focus);
 }
 
@@ -1414,13 +1414,4 @@ button { cursor: pointer; }
   .topbar__subtitle--desktop { display: none; }
   .view-btn__label { display: none; }
   .actions-menu__trigger-label { display: none; }
-  .overview-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
-
-@media (min-width: 641px) and (max-width: 1024px) {
-  .overview-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-}
-
-@media (min-width: 1025px) and (max-width: 1280px) {
-  .overview-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 }

@@ -57,7 +57,7 @@ export default function KanbanColumn({
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             {column.hint && (
               <span className="column__info" aria-label={column.hint}>
-                <span className="column__info-icon">i</span>
+                <MaterialIcon name="info" size={14} className="column__info-icon" />
                 <span className="column__info-tooltip">{column.hint}</span>
               </span>
             )}
