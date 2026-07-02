@@ -2,8 +2,9 @@
 
 import { dueStatus, formatDate, daysLabel } from '@/lib/date';
 import { OWNER_LABELS } from '@/lib/initialData';
+import { MaterialIcon } from '@/lib/icons';
 
-export default function KanbanCard({ card, onClick }) {
+export default function KanbanCard({ card, onClick, onArchive }) {
   const checklist = card.checklist || [];
   const checkDone = checklist.filter((i) => i.done).length;
   const checkTotal = checklist.length;
@@ -12,53 +13,73 @@ export default function KanbanCard({ card, onClick }) {
   const status = dueStatus(card.dueDate);
   const ownerKey = card.owner || 'eu';
   const ownerLabel = OWNER_LABELS[ownerKey];
-
-  // Primeiro nome do responsável/cliente
   const firstName = card.clientName ? card.clientName.trim().split(/\s+/)[0] : '';
 
-  return (
-    <div className="card" onClick={onClick} role="button" tabIndex={0}
-      onKeyDown={(e) => e.key === 'Enter' && onClick()}>
+  function handleArchive(e) {
+    e.stopPropagation();
+    onArchive?.();
+  }
 
-      {/* Título + primeiro nome */}
+  return (
+    <div
+      className="card"
+      onClick={onClick}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => e.key === 'Enter' && onClick()}
+    >
       <div className="card__title-row">
         <div className={`card__title${!card.title ? ' is-empty' : ''}`}>
           {card.title || 'sem título'}
         </div>
-        {firstName && (
-          <span className="card__client-name" title={card.clientName}>
-            {firstName}
-          </span>
-        )}
+        <div className="card__title-actions">
+          {firstName && (
+            <span className="card__client-name" title={card.clientName}>
+              {firstName}
+            </span>
+          )}
+          {onArchive && (
+            <button
+              className="icon-btn card__archive-btn"
+              onClick={handleArchive}
+              title="Arquivar card"
+              type="button"
+            >
+              <MaterialIcon name="archive" size={14} />
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="card__meta">
-        {/* Owner tag */}
         <span className={`tag tag--owner-${ownerKey}`}>
           {ownerLabel?.short || ownerKey}
         </span>
 
-        {/* Totem prévio */}
         {card.tags?.totemPrevio && (
-          <span className="tag tag--totem">totem</span>
+          <span className="tag tag--totem tag--totem-icon">
+            <MaterialIcon name="contrast" size={10} />
+            totem
+          </span>
         )}
 
-        {/* Due date */}
         {card.dueDate && (
           <span className={`tag tag--due status-${status}`}>
+            {status === 'soon' || status === 'overdue' ? (
+              <MaterialIcon name="warning" size={10} />
+            ) : null}
             {formatDate(card.dueDate)} · {daysLabel(card.dueDate)}
           </span>
         )}
 
-        {/* Cidade/Estado */}
         {card.cityState && (
-          <span className="tag" title={card.cityState}>
-            📍 {card.cityState}
+          <span className="tag tag--location" title={card.cityState}>
+            <MaterialIcon name="location_on" size={10} />
+            {card.cityState}
           </span>
         )}
       </div>
 
-      {/* Checklist progress */}
       {checkTotal > 0 && (
         <div className="card__checklist-progress">
           <div className="progress-bar">

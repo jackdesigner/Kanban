@@ -2,23 +2,41 @@
 
 import { useState } from 'react';
 import { createCard } from '@/lib/initialData';
+import { MaterialIcon } from '@/lib/icons';
 import CardModal from './CardModal';
 import KanbanCard from './KanbanCard';
 import { Draggable, Droppable } from '@hello-pangea/dnd';
 
-const OWNER_ICONS = { eu: '●', cliente: '○', interno: '◈' };
+const OWNER_ICONS = { eu: 'person', cliente: 'person_outline', interno: 'groups' };
 
-export default function KanbanColumn({ column, cards, allCards, onAddCard, onUpdateCard, onDeleteCard }) {
+export default function KanbanColumn({
+  column,
+  cards,
+  allCards,
+  onAddCard,
+  onUpdateCard,
+  onArchiveCard,
+}) {
   const [openCardId, setOpenCardId] = useState(null);
+  const [modalMode, setModalMode] = useState('view');
   const droppableId = column.id;
-  // Usa allCards (não filtrado) para garantir que o modal abre mesmo com filtro ativo
   const cardPool = allCards || cards;
   const openCard = openCardId ? cardPool.find((c) => c.id === openCardId) : null;
 
   function handleAdd() {
     const card = createCard({ owner: column.owner });
     onAddCard(column.id, card);
+    setModalMode('edit');
     setOpenCardId(card.id);
+  }
+
+  function openCardView(cardId) {
+    setModalMode('view');
+    setOpenCardId(cardId);
+  }
+
+  function handlePatch(updated) {
+    onUpdateCard(updated);
   }
 
   function handleSave(updated) {
@@ -26,19 +44,17 @@ export default function KanbanColumn({ column, cards, allCards, onAddCard, onUpd
     setOpenCardId(null);
   }
 
-  function handleDelete() {
-    onDeleteCard(column.id, openCard.id);
-    setOpenCardId(null);
+  function handleArchive(cardId) {
+    onArchiveCard(column.id, cardId);
+    if (openCardId === cardId) setOpenCardId(null);
   }
 
   return (
     <div className="column">
-      {/* Header */}
       <div className="column__header">
         <div className="column__title-row">
           <span className="column__title">{column.title}</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            {/* Ícone ⓘ com tooltip — só aparece se há hint */}
             {column.hint && (
               <span className="column__info" aria-label={column.hint}>
                 <span className="column__info-icon">i</span>
@@ -49,13 +65,16 @@ export default function KanbanColumn({ column, cards, allCards, onAddCard, onUpd
           </div>
         </div>
         <div className="column__owner">
-          <span>{OWNER_ICONS[column.owner] || '●'}</span>
+          <MaterialIcon name={OWNER_ICONS[column.owner] || 'person'} size={12} />
           <span>{column.owner}</span>
-          {column.waitsOn && <span title="Aguardando resposta — due date recomendado">· ⏱</span>}
+          {column.waitsOn && (
+            <span title="Aguardando resposta — due date recomendado">
+              · <MaterialIcon name="schedule" size={12} />
+            </span>
+          )}
         </div>
       </div>
 
-      {/* Droppable body com botão "+ novo card" como último item */}
       <Droppable droppableId={droppableId}>
         {(provided, snapshot) => (
           <div
@@ -72,14 +91,17 @@ export default function KanbanColumn({ column, cards, allCards, onAddCard, onUpd
                     {...drag.dragHandleProps}
                     className={dragSnapshot.isDragging ? 'is-dragging' : ''}
                   >
-                    <KanbanCard card={card} onClick={() => setOpenCardId(card.id)} />
+                    <KanbanCard
+                      card={card}
+                      onClick={() => openCardView(card.id)}
+                      onArchive={() => handleArchive(card.id)}
+                    />
                   </div>
                 )}
               </Draggable>
             ))}
             {provided.placeholder}
 
-            {/* Botão novo card — logo após o último card ou primeiro se vazio */}
             <button className="column__add" onClick={handleAdd}>
               + novo card
             </button>
@@ -87,14 +109,15 @@ export default function KanbanColumn({ column, cards, allCards, onAddCard, onUpd
         )}
       </Droppable>
 
-      {/* Modal */}
       {openCard && (
         <CardModal
           card={openCard}
           columnTitle={column.title}
+          initialMode={modalMode}
           onClose={() => setOpenCardId(null)}
           onSave={handleSave}
-          onDelete={handleDelete}
+          onPatch={handlePatch}
+          onArchive={() => handleArchive(openCard.id)}
         />
       )}
     </div>

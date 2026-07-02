@@ -2,14 +2,26 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { OWNER_LABELS } from '@/lib/initialData';
+import { formatDate } from '@/lib/date';
+import { MaterialIcon } from '@/lib/icons';
 
-/* -------- helpers -------- */
 function uid() {
   return `item-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 }
 
+function formatLogDate(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr + 'T00:00:00');
+  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+function todayISO() {
+  const d = new Date();
+  return d.toISOString().slice(0, 10);
+}
+
 /* -------- ListEditor -------- */
-function ListEditor({ label, items, onChange }) {
+function ListEditor({ label, icon, items, onChange }) {
   function updateText(id, text) {
     onChange(items.map((i) => (i.id === id ? { ...i, text } : i)));
   }
@@ -25,26 +37,48 @@ function ListEditor({ label, items, onChange }) {
 
   return (
     <div className="field">
-      <span className="field__label">{label}</span>
+      <span className="field__label field__label--icon">
+        {icon && <MaterialIcon name={icon} size={14} />}
+        {label}
+      </span>
       <div className="list-editor">
         {items.map((item) => (
           <div key={item.id} className={`list-editor__item${item.done ? ' done' : ''}`}>
-            <input
-              type="checkbox"
-              checked={item.done}
-              onChange={() => toggleDone(item.id)}
-            />
+            <input type="checkbox" checked={item.done} onChange={() => toggleDone(item.id)} />
             <input
               type="text"
               value={item.text}
               placeholder="item…"
               onChange={(e) => updateText(item.id, e.target.value)}
             />
-            <button className="icon-btn" onClick={() => remove(item.id)} title="Remover">×</button>
+            <button className="icon-btn" onClick={() => remove(item.id)} title="Remover">
+              <MaterialIcon name="close" size={14} />
+            </button>
           </div>
         ))}
         <button className="list-editor__add" onClick={add}>+ item</button>
       </div>
+    </div>
+  );
+}
+
+/* -------- ListView (read-only) -------- */
+function ListView({ label, icon, items }) {
+  if (!items?.length) return null;
+  return (
+    <div className="field">
+      <span className="field__label field__label--icon">
+        {icon && <MaterialIcon name={icon} size={14} />}
+        {label}
+      </span>
+      <ul className="list-view-readonly">
+        {items.filter((i) => i.text?.trim()).map((item) => (
+          <li key={item.id} className={item.done ? 'done' : ''}>
+            <MaterialIcon name={item.done ? 'check' : 'checklist'} size={12} />
+            {item.text}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
@@ -85,7 +119,9 @@ function EmailsEditor({ emails, onChange }) {
               placeholder="email@exemplo.com"
               onChange={(e) => updateEmail(idx, e.target.value)}
             />
-            <button className="icon-btn" onClick={() => removeEmail(idx)} title="Remover">×</button>
+            <button className="icon-btn" onClick={() => removeEmail(idx)} title="Remover">
+              <MaterialIcon name="close" size={14} />
+            </button>
           </div>
         ))}
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -96,11 +132,23 @@ function EmailsEditor({ emails, onChange }) {
               onClick={copyAll}
               title="Copiar todos os e-mails separados por vírgula"
             >
-              {copied ? '✓ Copiado!' : '⎘ Copiar todos'}
+              <MaterialIcon name={copied ? 'check' : 'content_copy'} size={14} />
+              {copied ? 'Copiado!' : 'Copiar todos'}
             </button>
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function EmailsView({ emails }) {
+  const valid = (emails || []).filter((e) => e.trim());
+  if (!valid.length) return null;
+  return (
+    <div className="field">
+      <span className="field__label">E-mails</span>
+      <div className="field__value">{valid.join(', ')}</div>
     </div>
   );
 }
@@ -115,12 +163,9 @@ function CidadeEstadoPicker({ value, onChange }) {
   const timerRef = useRef(null);
   const wrapRef = useRef(null);
 
-  // Fecha dropdown ao clicar fora
   useEffect(() => {
     function handleClick(e) {
-      if (wrapRef.current && !wrapRef.current.contains(e.target)) {
-        setOpen(false);
-      }
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false);
     }
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
@@ -131,7 +176,6 @@ function CidadeEstadoPicker({ value, onChange }) {
     setLoading(true);
     setOpen(true);
     try {
-      // Carrega todos na primeira vez e cacheia
       if (!cacheRef.current) {
         const res = await fetch('https://servicodados.ibge.gov.br/api/v1/localidades/municipios?orderBy=nome');
         const data = await res.json();
@@ -141,10 +185,7 @@ function CidadeEstadoPicker({ value, onChange }) {
         }));
       }
       const lower = q.toLowerCase();
-      const filtered = cacheRef.current
-        .filter((m) => m.nome.toLowerCase().startsWith(lower))
-        .slice(0, 30);
-      setResults(filtered);
+      setResults(cacheRef.current.filter((m) => m.nome.toLowerCase().startsWith(lower)).slice(0, 30));
     } catch {
       setResults([]);
     } finally {
@@ -167,7 +208,6 @@ function CidadeEstadoPicker({ value, onChange }) {
   }
 
   function handleBlur() {
-    // Se o usuário digitou algo diferente do valor salvo, salva o que está escrito
     if (query !== value) onChange(query);
   }
 
@@ -192,11 +232,7 @@ function CidadeEstadoPicker({ value, onChange }) {
               <div className="city-picker__empty">Nenhuma cidade encontrada</div>
             )}
             {results.map((r) => (
-              <div
-                key={r.label}
-                className="city-picker__option"
-                onMouseDown={() => handleSelect(r.label)}
-              >
+              <div key={r.label} className="city-picker__option" onMouseDown={() => handleSelect(r.label)}>
                 {r.label}
               </div>
             ))}
@@ -207,31 +243,159 @@ function CidadeEstadoPicker({ value, onChange }) {
   );
 }
 
+/* -------- Contact log modals -------- */
+function ContactLogCreateModal({ onSave, onClose }) {
+  const [date, setDate] = useState(todayISO());
+  const [comment, setComment] = useState('');
+
+  return (
+    <div className="modal-overlay modal-overlay--nested" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal modal--sm" role="dialog" aria-label="Criar log de contatos">
+        <div className="modal__header">
+          <span className="modal__header-label">Log de contatos</span>
+          <button className="icon-btn" onClick={onClose} title="Cancelar">
+            <MaterialIcon name="close" size={18} />
+          </button>
+        </div>
+        <div className="modal__body">
+          <div className="field">
+            <label className="field__label" htmlFor="log-date">Data</label>
+            <input id="log-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+          </div>
+          <div className="field">
+            <label className="field__label" htmlFor="log-comment">Comentário</label>
+            <textarea
+              id="log-comment"
+              placeholder="Descreva a interação…"
+              value={comment}
+              onChange={(e) => setComment(e.target.value)}
+              rows={4}
+            />
+          </div>
+        </div>
+        <div className="modal__footer modal__footer--end">
+          <button className="btn btn--primary btn--sm" onClick={() => onSave({ id: uid(), date, comment })}>
+            Salvar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ContactLogReadModal({ log, onClose }) {
+  return (
+    <div className="modal-overlay modal-overlay--nested" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal modal--sm" role="dialog" aria-label="Comentário do log">
+        <div className="modal__header">
+          <span className="modal__header-label">{formatLogDate(log.date)}</span>
+          <button className="icon-btn" onClick={onClose} title="Fechar">
+            <MaterialIcon name="close" size={18} />
+          </button>
+        </div>
+        <div className="modal__body">
+          <p className="contact-log__comment">{log.comment || '(sem comentário)'}</p>
+        </div>
+        <div className="modal__footer modal__footer--end">
+          <button className="btn btn--sm" onClick={onClose}>
+            <MaterialIcon name="arrow_back" size={14} />
+            Voltar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* -------- Contact log section -------- */
+function ContactLogSection({ logs, isEditing, onAdd, onRemove, onRead }) {
+  const sorted = [...(logs || [])].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+
+  return (
+    <div className="contact-log-section">
+      <div className="contact-log-section__header">
+        <span className="field__label">Log de contatos</span>
+        <button className="btn btn--sm contact-log__create" onClick={onAdd} type="button">
+          <MaterialIcon name="whatsapp" size={14} />
+          Criar log de contatos
+        </button>
+      </div>
+      {sorted.length === 0 ? (
+        <p className="contact-log__empty">Nenhum registro ainda.</p>
+      ) : (
+        <ol className="contact-log__list">
+          {sorted.map((log, idx) => (
+            <li key={log.id} className="contact-log__item">
+              <span className="contact-log__index">{idx + 1}.</span>
+              <span className="contact-log__date">{formatLogDate(log.date)}</span>
+              {log.comment?.trim() && (
+                <button
+                  className="icon-btn contact-log__comment-btn"
+                  onClick={() => onRead(log)}
+                  title="Ver comentário"
+                  type="button"
+                >
+                  <MaterialIcon name="comment" size={14} />
+                </button>
+              )}
+              {isEditing && (
+                <button
+                  className="icon-btn contact-log__remove"
+                  onClick={() => onRemove(log.id)}
+                  title="Remover registro"
+                  type="button"
+                >
+                  <MaterialIcon name="close" size={14} />
+                </button>
+              )}
+            </li>
+          ))}
+        </ol>
+      )}
+    </div>
+  );
+}
+
 /* -------- Modal principal -------- */
-export default function CardModal({ card, columnTitle, onClose, onSave, onDelete }) {
+export default function CardModal({
+  card,
+  columnTitle,
+  initialMode = 'view',
+  isArchivedView = false,
+  onClose,
+  onSave,
+  onPatch,
+  onArchive,
+  onDelete,
+}) {
+  const [mode, setMode] = useState(initialMode);
   const [draft, setDraft] = useState({
     clientName: '',
     emails: [],
     cityState: '',
+    contactLogs: [],
     ...card,
   });
+  const [showLogCreate, setShowLogCreate] = useState(false);
+  const [readLog, setReadLog] = useState(null);
 
-  // Salvar e fechar — sempre salva o draft atual
+  const isView = mode === 'view';
+
   const saveAndClose = useCallback(() => {
     onSave(draft);
   }, [draft, onSave]);
 
-  // ESC fecha e salva
   useEffect(() => {
     function handleKey(e) {
-      if (e.key === 'Escape') {
+      if (e.key === 'Escape' && !showLogCreate && !readLog) {
         e.stopPropagation();
-        saveAndClose();
+        if (isView) onClose();
+        else setMode('view');
       }
     }
     document.addEventListener('keydown', handleKey, true);
     return () => document.removeEventListener('keydown', handleKey, true);
-  }, [saveAndClose]);
+  }, [isView, onClose, showLogCreate, readLog]);
 
   function set(field, value) {
     setDraft((d) => ({ ...d, [field]: value }));
@@ -241,154 +405,268 @@ export default function CardModal({ card, columnTitle, onClose, onSave, onDelete
     setDraft((d) => ({ ...d, tags: { ...d.tags, [key]: value } }));
   }
 
-  // Clique no overlay → salva e fecha
   function handleOverlayClick(e) {
-    if (e.target === e.currentTarget) saveAndClose();
+    if (e.target !== e.currentTarget) return;
+    if (isView) onClose();
+    else setMode('view');
+  }
+
+  function addContactLog(log) {
+    const next = { ...draft, contactLogs: [...(draft.contactLogs || []), log] };
+    setDraft(next);
+    setShowLogCreate(false);
+    if (isView) (onPatch || onSave)(next);
+  }
+
+  function removeContactLog(logId) {
+    const next = (draft.contactLogs || []).filter((l) => l.id !== logId);
+    set('contactLogs', next);
+  }
+
+  function handleCreateLogClick() {
+    setShowLogCreate(true);
   }
 
   return (
-    <div className="modal-overlay" onClick={handleOverlayClick}>
-      <div className="modal" role="dialog" aria-modal="true" aria-label="Editar card">
-
-        {/* Header */}
-        <div className="modal__header">
-          <span className="modal__header-label">{columnTitle}</span>
-          <button className="icon-btn" onClick={saveAndClose} title="Fechar (salva automaticamente)">×</button>
-        </div>
-
-        {/* Body */}
-        <div className="modal__body">
-
-          {/* Título */}
-          <div className="field">
-            <input
-              className="title-input"
-              type="text"
-              placeholder="Nome do projeto / cliente"
-              value={draft.title}
-              onChange={(e) => set('title', e.target.value)}
-              autoFocus
-            />
-          </div>
-
-          <hr className="section-divider" />
-
-          {/* Responsável (cliente) + Cidade/Estado */}
-          <div className="two-col">
-            <div className="field">
-              <label className="field__label" htmlFor="modal-client-name">Responsável</label>
-              <input
-                id="modal-client-name"
-                type="text"
-                value={draft.clientName || ''}
-                onChange={(e) => set('clientName', e.target.value)}
-                placeholder="Nome do responsável…"
-              />
-            </div>
-
-            <div className="field">
-              <label className="field__label" htmlFor="modal-due">Prazo</label>
-              <input
-                id="modal-due"
-                type="date"
-                value={draft.dueDate || ''}
-                onChange={(e) => set('dueDate', e.target.value || null)}
-              />
-            </div>
-          </div>
-
-          {/* E-mails */}
-          <EmailsEditor
-            emails={draft.emails || []}
-            onChange={(v) => set('emails', v)}
-          />
-
-          {/* Cidade / Estado */}
-          <CidadeEstadoPicker
-            value={draft.cityState || ''}
-            onChange={(v) => set('cityState', v)}
-          />
-
-          <hr className="section-divider" />
-
-          {/* Owner */}
-          <div className="field">
-            <span className="field__label">Etapa / Responsável</span>
-            <div className="owner-select-row">
-              {Object.entries(OWNER_LABELS).map(([key, { text }]) => (
-                <button
-                  key={key}
-                  className={`owner-option${draft.owner === key ? ' selected' : ''}`}
-                  onClick={() => set('owner', key)}
-                  type="button"
-                >
-                  {text}
+    <>
+      <div className="modal-overlay" onClick={handleOverlayClick}>
+        <div
+          className="modal"
+          role="dialog"
+          aria-modal="true"
+          aria-label={isView ? 'Visualizar card' : 'Editar card'}
+        >
+          <div className="modal__header">
+            <span className="modal__header-label">{columnTitle}</span>
+            <div className="modal__header-actions">
+              {isView && onArchive && !isArchivedView && (
+                <button className="icon-btn" onClick={() => onArchive()} title="Arquivar card">
+                  <MaterialIcon name="archive" size={18} />
                 </button>
-              ))}
+              )}
+              <button
+                className="icon-btn"
+                onClick={isView ? onClose : () => setMode('view')}
+                title={isView ? 'Fechar' : 'Voltar à visualização'}
+              >
+                <MaterialIcon name="close" size={18} />
+              </button>
             </div>
           </div>
 
-          <hr className="section-divider" />
+          <div className="modal__body">
+            {isView ? (
+              <>
+                <h2 className="modal__title-readonly">{draft.title || 'sem título'}</h2>
+                <hr className="section-divider" />
 
-          {/* Notas */}
-          <div className="field">
-            <label className="field__label">Notas</label>
-            <textarea
-              placeholder="Descrição, contexto, observações…"
-              value={draft.notes}
-              onChange={(e) => set('notes', e.target.value)}
-            />
+                <div className="two-col">
+                  {draft.clientName && (
+                    <div className="field">
+                      <span className="field__label">Responsável</span>
+                      <div className="field__value">{draft.clientName}</div>
+                    </div>
+                  )}
+                  {draft.dueDate && (
+                    <div className="field">
+                      <span className="field__label">Prazo</span>
+                      <div className="field__value">{formatDate(draft.dueDate)}</div>
+                    </div>
+                  )}
+                </div>
+
+                <EmailsView emails={draft.emails} />
+
+                {draft.cityState && (
+                  <div className="field">
+                    <span className="field__label field__label--icon">
+                      <MaterialIcon name="location_on" size={14} />
+                      Cidade / Estado
+                    </span>
+                    <div className="field__value">{draft.cityState}</div>
+                  </div>
+                )}
+
+                <div className="field">
+                  <span className="field__label">Etapa / Responsável</span>
+                  <div className="field__value">{OWNER_LABELS[draft.owner]?.text || draft.owner}</div>
+                </div>
+
+                {draft.notes?.trim() && (
+                  <div className="field">
+                    <span className="field__label">Notas</span>
+                    <div className="field__value field__value--pre">{draft.notes}</div>
+                  </div>
+                )}
+
+                <ListView label="Ajustes feitos" icon="check_circle" items={draft.doneItems} />
+                <ListView label="Ajustes pendentes" icon="hourglass_empty" items={draft.pendingItems} />
+                <ListView label="Checklist de features" icon="checklist" items={draft.checklist} />
+
+                {draft.tags?.totemPrevio && (
+                  <div className="field">
+                    <span className="tag tag--totem tag--totem-icon">
+                      <MaterialIcon name="contrast" size={12} />
+                      Totem prévio ativo
+                    </span>
+                  </div>
+                )}
+
+                <hr className="section-divider" />
+                <ContactLogSection
+                  logs={draft.contactLogs}
+                  isEditing={false}
+                  onAdd={handleCreateLogClick}
+                  onRemove={removeContactLog}
+                  onRead={setReadLog}
+                />
+              </>
+            ) : (
+              <>
+                <div className="field">
+                  <input
+                    className="title-input"
+                    type="text"
+                    placeholder="Nome do projeto / cliente"
+                    value={draft.title}
+                    onChange={(e) => set('title', e.target.value)}
+                    autoFocus
+                  />
+                </div>
+
+                <hr className="section-divider" />
+
+                <div className="two-col">
+                  <div className="field">
+                    <label className="field__label" htmlFor="modal-client-name">Responsável</label>
+                    <input
+                      id="modal-client-name"
+                      type="text"
+                      value={draft.clientName || ''}
+                      onChange={(e) => set('clientName', e.target.value)}
+                      placeholder="Nome do responsável…"
+                    />
+                  </div>
+                  <div className="field">
+                    <label className="field__label" htmlFor="modal-due">Prazo</label>
+                    <input
+                      id="modal-due"
+                      type="date"
+                      value={draft.dueDate || ''}
+                      onChange={(e) => set('dueDate', e.target.value || null)}
+                    />
+                  </div>
+                </div>
+
+                <EmailsEditor emails={draft.emails || []} onChange={(v) => set('emails', v)} />
+                <CidadeEstadoPicker value={draft.cityState || ''} onChange={(v) => set('cityState', v)} />
+
+                <hr className="section-divider" />
+
+                <div className="field">
+                  <span className="field__label">Etapa / Responsável</span>
+                  <div className="owner-select-row">
+                    {Object.entries(OWNER_LABELS).map(([key, { text }]) => (
+                      <button
+                        key={key}
+                        className={`owner-option${draft.owner === key ? ' selected' : ''}`}
+                        onClick={() => set('owner', key)}
+                        type="button"
+                      >
+                        {text}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <hr className="section-divider" />
+
+                <div className="field">
+                  <label className="field__label">Notas</label>
+                  <textarea
+                    placeholder="Descrição, contexto, observações…"
+                    value={draft.notes}
+                    onChange={(e) => set('notes', e.target.value)}
+                  />
+                </div>
+
+                <ListEditor label="Ajustes feitos" icon="check_circle" items={draft.doneItems} onChange={(v) => set('doneItems', v)} />
+                <ListEditor label="Ajustes pendentes" icon="hourglass_empty" items={draft.pendingItems} onChange={(v) => set('pendingItems', v)} />
+                <ListEditor label="Checklist de features" icon="checklist" items={draft.checklist} onChange={(v) => set('checklist', v)} />
+
+                <hr className="section-divider" />
+
+                <div className="field">
+                  <span className="field__label">Tags especiais</span>
+                  <label className="checkbox-row checkbox-row--icon">
+                    <input
+                      type="checkbox"
+                      checked={!!draft.tags?.totemPrevio}
+                      onChange={(e) => setTag('totemPrevio', e.target.checked)}
+                    />
+                    <MaterialIcon name="contrast" size={14} />
+                    Totem prévio ativo
+                  </label>
+                </div>
+
+                <hr className="section-divider" />
+                <ContactLogSection
+                  logs={draft.contactLogs}
+                  isEditing
+                  onAdd={handleCreateLogClick}
+                  onRemove={removeContactLog}
+                  onRead={setReadLog}
+                />
+              </>
+            )}
           </div>
 
-          {/* Ajustes feitos */}
-          <ListEditor
-            label="✅ Ajustes feitos"
-            items={draft.doneItems}
-            onChange={(v) => set('doneItems', v)}
-          />
-
-          {/* Ajustes pendentes */}
-          <ListEditor
-            label="⏳ Ajustes pendentes"
-            items={draft.pendingItems}
-            onChange={(v) => set('pendingItems', v)}
-          />
-
-          {/* Checklist de features */}
-          <ListEditor
-            label="☐ Checklist de features"
-            items={draft.checklist}
-            onChange={(v) => set('checklist', v)}
-          />
-
-          <hr className="section-divider" />
-
-          {/* Tags especiais */}
-          <div className="field">
-            <span className="field__label">Tags especiais</span>
-            <label className="checkbox-row">
-              <input
-                type="checkbox"
-                checked={!!draft.tags?.totemPrevio}
-                onChange={(e) => setTag('totemPrevio', e.target.checked)}
-              />
-              ◐ Totem prévio ativo
-            </label>
+          <div className="modal__footer">
+            {isView ? (
+              <>
+                <button className="btn btn--sm" onClick={onClose}>
+                  <MaterialIcon name="arrow_back" size={14} />
+                  Voltar
+                </button>
+                <div className="modal__footer-actions">
+                  {isArchivedView && (
+                    <button className="btn btn--danger btn--sm" onClick={onDelete}>
+                      <MaterialIcon name="delete" size={14} />
+                      Excluir
+                    </button>
+                  )}
+                  {!isArchivedView && (
+                    <button className="btn btn--primary btn--sm" onClick={() => setMode('edit')}>
+                      <MaterialIcon name="edit" size={14} />
+                      Editar
+                    </button>
+                  )}
+                </div>
+              </>
+            ) : (
+              <>
+                <button className="btn btn--sm" onClick={() => { setDraft({ ...card, contactLogs: card.contactLogs || [] }); setMode('view'); }}>
+                  <MaterialIcon name="arrow_back" size={14} />
+                  Voltar
+                </button>
+                <button className="btn btn--primary btn--sm" onClick={saveAndClose}>
+                  Salvar
+                </button>
+              </>
+            )}
           </div>
-
         </div>
-
-        {/* Footer */}
-        <div className="modal__footer">
-          <button className="btn btn--danger btn--sm" onClick={onDelete}>
-            Excluir card
-          </button>
-          <button className="btn btn--primary btn--sm" onClick={saveAndClose}>
-            Salvar e fechar
-          </button>
-        </div>
-
       </div>
-    </div>
+
+      {showLogCreate && (
+        <ContactLogCreateModal
+          onSave={addContactLog}
+          onClose={() => setShowLogCreate(false)}
+        />
+      )}
+      {readLog && (
+        <ContactLogReadModal log={readLog} onClose={() => setReadLog(null)} />
+      )}
+    </>
   );
 }

@@ -6,6 +6,7 @@ import { exportBoardAsJSON } from '@/lib/storage';
 import { createEmptyBoard, createCard } from '@/lib/initialData';
 import { supabase } from '@/lib/supabaseClient';
 import { formatDate, daysLabel } from '@/lib/date';
+import { MaterialIcon } from '@/lib/icons';
 import KanbanColumn from './KanbanColumn';
 import CardModal from './CardModal';
 
@@ -45,15 +46,6 @@ function IconList() {
 function IconOverview() {
   return (
     <svg viewBox="0 0 16 16"><rect x="1" y="1" width="6" height="6" rx="1"/><rect x="9" y="1" width="6" height="6" rx="1"/><rect x="1" y="9" width="6" height="6" rx="1"/><rect x="9" y="9" width="6" height="6" rx="1"/></svg>
-  );
-}
-function IconMenu() {
-  return (
-    <svg viewBox="0 0 16 16" style={{width:13,height:13,stroke:'currentColor',fill:'none',strokeWidth:2,strokeLinecap:'round'}}>
-      <circle cx="8" cy="3" r="0.8" fill="currentColor" stroke="none"/>
-      <circle cx="8" cy="8" r="0.8" fill="currentColor" stroke="none"/>
-      <circle cx="8" cy="13" r="0.8" fill="currentColor" stroke="none"/>
-    </svg>
   );
 }
 
@@ -100,11 +92,12 @@ export default function KanbanBoard() {
   const [viewMode, setViewMode] = useState('kanban'); // 'kanban' | 'lista' | 'overview'
   const [theme, setTheme] = useState('default');
   const [menuOpen, setMenuOpen] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
   const menuRef = useRef(null);
 
-  // Modal aberto na view lista/overview
   const [listModalCard, setListModalCard] = useState(null);
   const [listModalColId, setListModalColId] = useState(null);
+  const [listModalMode, setListModalMode] = useState('view');
 
   /* Aplica tema no <html> */
   useEffect(() => {
@@ -257,13 +250,19 @@ export default function KanbanBoard() {
     });
   }
 
-  function handleDeleteCard(colId, cardId) {
+  function handleArchiveCard(colId, cardId) {
     setBoard((prev) => {
-      const cards = { ...prev.cards };
-      delete cards[cardId];
       const next = {
         ...prev,
-        cards,
+        cards: {
+          ...prev.cards,
+          [cardId]: {
+            ...prev.cards[cardId],
+            archived: true,
+            archivedAt: Date.now(),
+            archivedFromColId: colId,
+          },
+        },
         columns: {
           ...prev.columns,
           [colId]: {
@@ -272,6 +271,16 @@ export default function KanbanBoard() {
           },
         },
       };
+      persistirNoSupabase(next);
+      return next;
+    });
+  }
+
+  function handleDeleteCard(cardId) {
+    setBoard((prev) => {
+      const cards = { ...prev.cards };
+      delete cards[cardId];
+      const next = { ...prev, cards };
       persistirNoSupabase(next);
       return next;
     });
@@ -291,117 +300,226 @@ export default function KanbanBoard() {
     const col = board.columns[colId];
     const card = createCard({ owner: col.owner });
     handleAddCard(colId, card);
+    setListModalMode('edit');
     setListModalCard(card);
     setListModalColId(colId);
   }
 
-  if (!board) return <div style={{ padding: 32, color: 'var(--text-muted)' }}>Carregando do Supabase…</div>;
+  function openListModal(card, colId) {
+    setListModalMode('view');
+    setListModalCard(card);
+    setListModalColId(colId);
+  }
 
-  const totalCards = Object.keys(board.cards).length;
+  function closeListModal() {
+    setListModalCard(null);
+    setListModalColId(null);
+  }
+
+  const activeCards = Object.values(board.cards).filter((c) => !c.archived);
+  const archivedCards = Object.values(board.cards).filter((c) => c.archived);
+  const totalCards = activeCards.length;
+
+  const filterCard = (c) => filter === 'all' || c.owner === filter;
+
+  if (!board) return <div style={{ padding: 32, color: 'var(--text-muted)' }}>Carregando do Supabase…</div>;
 
   /* ---- Topbar ---- */
   const topbar = (
     <header className="topbar">
-      <div className="topbar__brand">
-        <span className="bracket">[</span>
-        <span className="topbar__title">Projetos do Jack</span>
-        <span className="bracket">]</span>
-        <span className="topbar__subtitle">processo de sistemas · {totalCards} cards</span>
+      <div className="topbar__row topbar__row--primary">
+        <div className="topbar__brand">
+          <span className="bracket">[</span>
+          <span className="topbar__title">Projetos do Jack</span>
+          <span className="bracket">]</span>
+          <span className="topbar__subtitle topbar__subtitle--desktop">processo de sistemas · {totalCards} cards</span>
+        </div>
+
+        <div className="topbar__primary-actions">
+          <span className="topbar__count">{totalCards} cards</span>
+          <div className="actions-menu" ref={menuRef}>
+            <button
+              className="actions-menu__trigger btn btn--sm actions-menu__trigger--icon"
+              onClick={() => setMenuOpen((o) => !o)}
+              title="Mais ações"
+              aria-label="Mais ações"
+            >
+              <MaterialIcon name="more_vert" size={16} />
+              <span className="actions-menu__trigger-label">Ações</span>
+            </button>
+
+            {menuOpen && (
+              <div className="actions-menu__panel">
+                <button
+                  className="actions-menu__item"
+                  onClick={() => { setShowArchived(true); setMenuOpen(false); }}
+                >
+                  <MaterialIcon name="archive" size={14} />
+                  Ver arquivados
+                </button>
+                <button
+                  className="actions-menu__item"
+                  onClick={() => { exportBoardAsJSON(board); setMenuOpen(false); }}
+                >
+                  <MaterialIcon name="download" size={14} />
+                  Baixar JSON
+                </button>
+                <button className="actions-menu__item actions-menu__item--danger" onClick={handleReset}>
+                  <MaterialIcon name="restart_alt" size={14} />
+                  Limpar board
+                </button>
+
+                <div className="actions-menu__divider" />
+                <div className="actions-menu__section-label">Tema</div>
+
+                {THEMES.map((t) => (
+                  <button
+                    key={t.key}
+                    className="actions-menu__item"
+                    onClick={() => applyTheme(t.key)}
+                    style={{ fontWeight: theme === t.key ? 700 : 400 }}
+                  >
+                    {theme === t.key ? (
+                      <MaterialIcon name="check" size={14} />
+                    ) : (
+                      <span style={{ width: 14 }} />
+                    )}
+                    {t.label}
+                    <span className="theme-swatches" style={{ marginLeft: 'auto' }}>
+                      {THEME_COLORS[t.key].map((color, i) => (
+                        <span key={i} className="theme-swatch" style={{ background: color }} />
+                      ))}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
-      <div className="topbar__actions">
-        {/* Filtros */}
-        <div className="filter-group" role="group" aria-label="Filtrar por responsável">
-          {FILTERS.map((f) => (
-            <button
-              key={f.key}
-              className={`filter-chip${filter === f.key ? ' active' : ''}`}
-              onClick={() => setFilter(f.key)}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Modos de visualização */}
-        <div className="view-group" role="group" aria-label="Modo de visualização">
-          <button
-            className={`view-btn${viewMode === 'kanban' ? ' active' : ''}`}
-            onClick={() => setViewMode('kanban')}
-            title="Kanban"
-          >
-            <IconKanban /> Kanban
-          </button>
-          <button
-            className={`view-btn${viewMode === 'lista' ? ' active' : ''}`}
-            onClick={() => setViewMode('lista')}
-            title="Lista"
-          >
-            <IconList /> Lista
-          </button>
-          <button
-            className={`view-btn${viewMode === 'overview' ? ' active' : ''}`}
-            onClick={() => setViewMode('overview')}
-            title="Visão geral"
-          >
-            <IconOverview /> Overview
-          </button>
-        </div>
-
-        {/* Menu de ações */}
-        <div className="actions-menu" ref={menuRef}>
-          <button
-            className="actions-menu__trigger btn btn--sm"
-            onClick={() => setMenuOpen((o) => !o)}
-            title="Mais ações"
-          >
-            <IconMenu /> Ações
-          </button>
-
-          {menuOpen && (
-            <div className="actions-menu__panel">
-              {/* Download JSON */}
+      {!showArchived && (
+        <div className="topbar__row topbar__row--secondary">
+          <div className="filter-group" role="group" aria-label="Filtrar por responsável">
+            {FILTERS.map((f) => (
               <button
-                className="actions-menu__item"
-                onClick={() => { exportBoardAsJSON(board); setMenuOpen(false); }}
+                key={f.key}
+                className={`filter-chip${filter === f.key ? ' active' : ''}`}
+                onClick={() => setFilter(f.key)}
               >
-                ↓ Baixar JSON
+                {f.label}
               </button>
+            ))}
+          </div>
 
-              {/* Limpar */}
-              <button className="actions-menu__item actions-menu__item--danger" onClick={handleReset}>
-                ↺ Limpar board
+          <div className="view-group" role="group" aria-label="Modo de visualização">
+            <button
+              className={`view-btn${viewMode === 'kanban' ? ' active' : ''}`}
+              onClick={() => setViewMode('kanban')}
+              title="Kanban"
+              aria-label="Kanban"
+            >
+              <IconKanban />
+              <span className="view-btn__label">Kanban</span>
+            </button>
+            <button
+              className={`view-btn${viewMode === 'lista' ? ' active' : ''}`}
+              onClick={() => setViewMode('lista')}
+              title="Lista"
+              aria-label="Lista"
+            >
+              <IconList />
+              <span className="view-btn__label">Lista</span>
+            </button>
+            <button
+              className={`view-btn${viewMode === 'overview' ? ' active' : ''}`}
+              onClick={() => setViewMode('overview')}
+              title="Visão geral"
+              aria-label="Overview"
+            >
+              <IconOverview />
+              <span className="view-btn__label">Overview</span>
+            </button>
+          </div>
+        </div>
+      )}
+    </header>
+  );
+
+  /* ---- VIEW: ARQUIVADOS ---- */
+  if (showArchived) {
+    const filtered = archivedCards.filter(filterCard);
+
+    return (
+      <div className="app">
+        {topbar}
+        <main className="board--list">
+          <div className="archived-view">
+            <div className="archived-view__header">
+              <button className="btn btn--sm" onClick={() => setShowArchived(false)}>
+                <MaterialIcon name="arrow_back" size={14} />
+                Voltar ao board
               </button>
+              <span className="archived-view__title">Cards arquivados ({filtered.length})</span>
+            </div>
 
-              <div className="actions-menu__divider" />
-              <div className="actions-menu__section-label">Tema</div>
-
-              {/* Temas */}
-              {THEMES.map((t) => (
+            <div className="filter-group archived-view__filters" role="group" aria-label="Filtrar arquivados">
+              {FILTERS.map((f) => (
                 <button
-                  key={t.key}
-                  className="actions-menu__item"
-                  onClick={() => applyTheme(t.key)}
-                  style={{ fontWeight: theme === t.key ? 700 : 400 }}
+                  key={f.key}
+                  className={`filter-chip${filter === f.key ? ' active' : ''}`}
+                  onClick={() => setFilter(f.key)}
                 >
-                  {theme === t.key ? '✓ ' : '    '}{t.label}
-                  <span className="theme-swatches" style={{ marginLeft: 'auto' }}>
-                    {THEME_COLORS[t.key].map((color, i) => (
-                      <span
-                        key={i}
-                        className="theme-swatch"
-                        style={{ background: color }}
-                      />
-                    ))}
-                  </span>
+                  {f.label}
                 </button>
               ))}
             </div>
+
+            {filtered.length === 0 && (
+              <div className="empty-state">Nenhum card arquivado.</div>
+            )}
+
+            <div className="archived-view__list">
+              {filtered.map((card) => (
+                <div
+                  key={card.id}
+                  className="list-view__row"
+                  onClick={() => openListModal(card, card.archivedFromColId)}
+                >
+                  <span className="list-view__row-title">{card.title || 'sem título'}</span>
+                  {card.clientName && (
+                    <span className="list-view__row-client">{card.clientName.split(' ')[0]}</span>
+                  )}
+                  {card.archivedAt && (
+                    <span className="list-view__row-due">
+                      arquivado em {new Date(card.archivedAt).toLocaleDateString('pt-BR')}
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {listModalCard && (
+            <CardModal
+              card={listModalCard}
+              columnTitle={board.columns[listModalColId]?.title || 'Arquivado'}
+              initialMode="view"
+              isArchivedView
+              onClose={closeListModal}
+              onSave={(updated) => { handleUpdateCard(updated); closeListModal(); }}
+              onDelete={() => {
+                if (confirm('Excluir permanentemente este card?')) {
+                  handleDeleteCard(listModalCard.id);
+                  closeListModal();
+                }
+              }}
+            />
           )}
-        </div>
+        </main>
       </div>
-    </header>
-  );
+    );
+  }
 
   /* ---- VIEW: KANBAN ---- */
   if (viewMode === 'kanban') {
@@ -413,8 +531,11 @@ export default function KanbanBoard() {
             <div className="board__track">
               {board.columnOrder.map((colId) => {
                 const col = board.columns[colId];
-                const allColCards = col.cardIds.map((id) => board.cards[id]).filter(Boolean);
-                const cards = allColCards.filter((c) => filter === 'all' || c.owner === filter);
+                const allColCards = col.cardIds
+                  .map((id) => board.cards[id])
+                  .filter(Boolean)
+                  .filter((c) => !c.archived);
+                const cards = allColCards.filter(filterCard);
 
                 return (
                   <KanbanColumn
@@ -424,7 +545,7 @@ export default function KanbanBoard() {
                     allCards={allColCards}
                     onAddCard={handleAddCard}
                     onUpdateCard={handleUpdateCard}
-                    onDeleteCard={handleDeleteCard}
+                    onArchiveCard={handleArchiveCard}
                   />
                 );
               })}
@@ -447,7 +568,8 @@ export default function KanbanBoard() {
               const cards = col.cardIds
                 .map((id) => board.cards[id])
                 .filter(Boolean)
-                .filter((c) => filter === 'all' || c.owner === filter);
+                .filter((c) => !c.archived)
+                .filter(filterCard);
 
               return (
                 <div key={colId} className="list-view__section">
@@ -462,7 +584,7 @@ export default function KanbanBoard() {
                     <div
                       key={card.id}
                       className="list-view__row"
-                      onClick={() => { setListModalCard(card); setListModalColId(colId); }}
+                      onClick={() => openListModal(card, colId)}
                     >
                       <span className="list-view__row-title">{card.title || 'sem título'}</span>
                       {card.clientName && (
@@ -488,16 +610,16 @@ export default function KanbanBoard() {
             <CardModal
               card={listModalCard}
               columnTitle={board.columns[listModalColId]?.title}
-              onClose={() => { setListModalCard(null); setListModalColId(null); }}
+              initialMode={listModalMode}
+              onClose={closeListModal}
               onSave={(updated) => {
                 handleUpdateCard(updated);
-                setListModalCard(null);
-                setListModalColId(null);
+                closeListModal();
               }}
-              onDelete={() => {
-                handleDeleteCard(listModalColId, listModalCard.id);
-                setListModalCard(null);
-                setListModalColId(null);
+              onPatch={handleUpdateCard}
+              onArchive={() => {
+                handleArchiveCard(listModalColId, listModalCard.id);
+                closeListModal();
               }}
             />
           )}
@@ -513,7 +635,8 @@ export default function KanbanBoard() {
       const cards = col.cardIds
         .map((id) => board.cards[id])
         .filter(Boolean)
-        .filter((c) => filter === 'all' || c.owner === filter);
+        .filter((c) => !c.archived)
+        .filter(filterCard);
       return { col, cards };
     });
 
@@ -539,7 +662,7 @@ export default function KanbanBoard() {
                         key={card.id}
                         className="overview-card"
                         title={card.title || 'sem título'}
-                        onClick={() => { setListModalCard(card); setListModalColId(col.id); }}
+                        onClick={() => openListModal(card, col.id)}
                       >
                         {card.title || 'sem título'}
                       </div>
@@ -558,16 +681,16 @@ export default function KanbanBoard() {
             <CardModal
               card={listModalCard}
               columnTitle={board.columns[listModalColId]?.title}
-              onClose={() => { setListModalCard(null); setListModalColId(null); }}
+              initialMode={listModalMode}
+              onClose={closeListModal}
               onSave={(updated) => {
                 handleUpdateCard(updated);
-                setListModalCard(null);
-                setListModalColId(null);
+                closeListModal();
               }}
-              onDelete={() => {
-                handleDeleteCard(listModalColId, listModalCard.id);
-                setListModalCard(null);
-                setListModalColId(null);
+              onPatch={handleUpdateCard}
+              onArchive={() => {
+                handleArchiveCard(listModalColId, listModalCard.id);
+                closeListModal();
               }}
             />
           )}
