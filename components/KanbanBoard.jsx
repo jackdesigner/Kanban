@@ -300,8 +300,8 @@ export default function KanbanBoard() {
     setListModalMode('view');
   }
 
-  const activeCards = Object.values(board.cards).filter((c) => !c.archived);
-  const archivedCards = Object.values(board.cards).filter((c) => c.archived);
+  const activeCards = board ? Object.values(board.cards).filter((c) => !c.archived) : [];
+  const archivedCards = board ? Object.values(board.cards).filter((c) => c.archived) : [];
   const totalCards = activeCards.length;
 
   const filterCard = (c) => filter === 'all' || c.owner === filter;
