@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { OWNER_LABELS } from '@/lib/initialData';
+import { OWNER_LABELS, formatCardLocation, normalizeCard } from '@/lib/initialData';
 import { formatDate } from '@/lib/date';
 import { MaterialIcon } from '@/lib/icons';
 
@@ -16,8 +16,7 @@ function formatLogDate(dateStr) {
 }
 
 function todayISO() {
-  const d = new Date();
-  return d.toISOString().slice(0, 10);
+  return new Date().toISOString().slice(0, 10);
 }
 
 /* -------- ListEditor -------- */
@@ -62,7 +61,6 @@ function ListEditor({ label, icon, items, onChange }) {
   );
 }
 
-/* -------- ListView (read-only) -------- */
 function ListView({ label, icon, items }) {
   if (!items?.length) return null;
   return (
@@ -76,6 +74,32 @@ function ListView({ label, icon, items }) {
           <li key={item.id} className={item.done ? 'done' : ''}>
             <MaterialIcon name={item.done ? 'check' : 'checklist'} size={12} />
             {item.text}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function ChecklistViewInteractive({ label, icon, items, onChange }) {
+  const visible = (items || []).filter((i) => i.text?.trim());
+  if (!visible.length) return null;
+
+  function toggle(id) {
+    onChange(items.map((i) => (i.id === id ? { ...i, done: !i.done } : i)));
+  }
+
+  return (
+    <div className="field">
+      <span className="field__label field__label--icon">
+        {icon && <MaterialIcon name={icon} size={14} />}
+        {label}
+      </span>
+      <ul className="list-view-readonly list-view-interactive">
+        {visible.map((item) => (
+          <li key={item.id} className={item.done ? 'done' : ''}>
+            <input type="checkbox" checked={!!item.done} onChange={() => toggle(item.id)} />
+            <span>{item.text}</span>
           </li>
         ))}
       </ul>
@@ -153,15 +177,17 @@ function EmailsView({ emails }) {
   );
 }
 
-/* -------- CidadeEstadoPicker -------- */
-function CidadeEstadoPicker({ value, onChange }) {
-  const [query, setQuery] = useState(value || '');
+/* -------- Cidade + Estado -------- */
+function LocationFields({ city, state, onCityChange, onStateChange }) {
+  const [query, setQuery] = useState(city || '');
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const cacheRef = useRef(null);
   const timerRef = useRef(null);
   const wrapRef = useRef(null);
+
+  useEffect(() => { setQuery(city || ''); }, [city]);
 
   useEffect(() => {
     function handleClick(e) {
@@ -182,6 +208,7 @@ function CidadeEstadoPicker({ value, onChange }) {
         cacheRef.current = data.map((m) => ({
           label: `${m.nome} – ${m.microrregiao.mesorregiao.UF.sigla}`,
           nome: m.nome,
+          uf: m.microrregiao.mesorregiao.UF.sigla,
         }));
       }
       const lower = q.toLowerCase();
@@ -196,48 +223,151 @@ function CidadeEstadoPicker({ value, onChange }) {
   function handleInput(e) {
     const q = e.target.value;
     setQuery(q);
+    onCityChange(q);
     clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => fetchCidades(q), 250);
   }
 
-  function handleSelect(label) {
-    setQuery(label);
-    onChange(label);
+  function handleSelect(item) {
+    setQuery(item.nome);
+    onCityChange(item.nome);
+    onStateChange(item.uf);
     setOpen(false);
     setResults([]);
   }
 
-  function handleBlur() {
-    if (query !== value) onChange(query);
+  return (
+    <div className="two-col">
+      <div className="field">
+        <span className="field__label">Cidade</span>
+        <div className="city-picker" ref={wrapRef}>
+          <input
+            className="city-picker__input"
+            type="text"
+            value={query}
+            onChange={handleInput}
+            onFocus={() => { if (query.length >= 2) setOpen(true); }}
+            placeholder="Digite a cidade…"
+            autoComplete="off"
+          />
+          {open && (
+            <div className="city-picker__dropdown">
+              {loading && <div className="city-picker__loading">Carregando…</div>}
+              {!loading && results.length === 0 && query.length >= 2 && (
+                <div className="city-picker__empty">Nenhuma cidade encontrada</div>
+              )}
+              {results.map((r) => (
+                <div key={r.label} className="city-picker__option" onMouseDown={() => handleSelect(r)}>
+                  {r.label}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+      <div className="field">
+        <label className="field__label" htmlFor="modal-state">Estado (UF)</label>
+        <input
+          id="modal-state"
+          type="text"
+          value={state || ''}
+          maxLength={2}
+          placeholder="SP"
+          onChange={(e) => onStateChange(e.target.value.toUpperCase().slice(0, 2))}
+        />
+      </div>
+    </div>
+  );
+}
+
+function TagsEditor({ tags, onChange }) {
+  function setTag(key, value) {
+    onChange({ ...tags, [key]: value });
   }
 
   return (
     <div className="field">
-      <span className="field__label">Cidade / Estado</span>
-      <div className="city-picker" ref={wrapRef}>
-        <input
-          className="city-picker__input"
-          type="text"
-          value={query}
-          onChange={handleInput}
-          onBlur={handleBlur}
-          onFocus={() => { if (query.length >= 2) setOpen(true); }}
-          placeholder="Digite a cidade…"
-          autoComplete="off"
-        />
-        {open && (
-          <div className="city-picker__dropdown">
-            {loading && <div className="city-picker__loading">Carregando…</div>}
-            {!loading && results.length === 0 && query.length >= 2 && (
-              <div className="city-picker__empty">Nenhuma cidade encontrada</div>
-            )}
-            {results.map((r) => (
-              <div key={r.label} className="city-picker__option" onMouseDown={() => handleSelect(r.label)}>
-                {r.label}
-              </div>
-            ))}
-          </div>
-        )}
+      <span className="field__label">Tags especiais</span>
+      <label className="checkbox-row checkbox-row--icon">
+        <input type="checkbox" checked={!!tags?.totemPrevio} onChange={(e) => setTag('totemPrevio', e.target.checked)} />
+        <MaterialIcon name="contrast" size={14} />
+        Totem prévio ativo
+      </label>
+      <label className="checkbox-row checkbox-row--icon">
+        <input type="checkbox" checked={!!tags?.salaInstalada} onChange={(e) => setTag('salaInstalada', e.target.checked)} />
+        <MaterialIcon name="brick" size={14} />
+        Sala já instalada
+      </label>
+      <label className="checkbox-row checkbox-row--icon">
+        <input type="checkbox" checked={!!tags?.telaCliente} onChange={(e) => setTag('telaCliente', e.target.checked)} />
+        <MaterialIcon name="monitor" size={14} />
+        Tela do cliente
+      </label>
+    </div>
+  );
+}
+
+function TagsView({ tags }) {
+  const active = [
+    tags?.totemPrevio && { icon: 'contrast', label: 'Totem prévio ativo' },
+    tags?.salaInstalada && { icon: 'brick', label: 'Sala já instalada' },
+    tags?.telaCliente && { icon: 'monitor', label: 'Tela do cliente' },
+  ].filter(Boolean);
+
+  if (!active.length) return null;
+
+  return (
+    <div className="field">
+      <span className="field__label">Tags especiais</span>
+      <div className="tags-view">
+        {active.map((t) => (
+          <span key={t.label} className="tag tag--totem tag--totem-icon">
+            <MaterialIcon name={t.icon} size={12} />
+            {t.label}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* -------- Move card modal -------- */
+function MoveCardModal({ columns, currentColId, onConfirm, onClose }) {
+  const [selected, setSelected] = useState(currentColId);
+
+  return (
+    <div className="modal-overlay modal-overlay--nested" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal modal--sm" role="dialog" aria-label="Mover card para">
+        <div className="modal__header">
+          <span className="modal__header-label">Mover card para:</span>
+          <button className="icon-btn" onClick={onClose} title="Cancelar">
+            <MaterialIcon name="close" size={18} />
+          </button>
+        </div>
+        <div className="modal__body move-col-list">
+          {columns.map((col) => (
+            <label key={col.id} className={`move-col-option${selected === col.id ? ' selected' : ''}`}>
+              <input
+                type="radio"
+                name="move-col"
+                value={col.id}
+                checked={selected === col.id}
+                onChange={() => setSelected(col.id)}
+              />
+              {col.title}
+            </label>
+          ))}
+        </div>
+        <div className="modal__footer">
+          <button className="btn btn--sm" onClick={onClose}>Cancelar</button>
+          <button
+            className="btn btn--primary btn--sm"
+            disabled={selected === currentColId}
+            onClick={() => onConfirm(selected)}
+          >
+            Confirmar
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -307,7 +437,6 @@ function ContactLogReadModal({ log, onClose }) {
   );
 }
 
-/* -------- Contact log section -------- */
 function ContactLogSection({ logs, isEditing, onAdd, onRemove, onRead }) {
   const sorted = [...(logs || [])].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
 
@@ -359,46 +488,59 @@ function ContactLogSection({ logs, isEditing, onAdd, onRemove, onRead }) {
 /* -------- Modal principal -------- */
 export default function CardModal({
   card,
+  columnId,
   columnTitle,
+  columns = [],
   initialMode = 'view',
   isArchivedView = false,
   onClose,
   onSave,
   onPatch,
   onArchive,
+  onUnarchive,
   onDelete,
+  onMoveCard,
+  onColumnChange,
 }) {
   const [mode, setMode] = useState(initialMode);
-  const [draft, setDraft] = useState({
+  const [draft, setDraft] = useState(() => normalizeCard({
     clientName: '',
     emails: [],
-    cityState: '',
+    city: '',
+    state: '',
     contactLogs: [],
     ...card,
-  });
+  }));
   const [showLogCreate, setShowLogCreate] = useState(false);
   const [readLog, setReadLog] = useState(null);
+  const [showMove, setShowMove] = useState(false);
 
   const isView = mode === 'view';
+  const canPatch = isView && !!onPatch && !isArchivedView;
 
   useEffect(() => {
     setMode(initialMode);
-    setDraft({
+    setDraft(normalizeCard({
       clientName: '',
       emails: [],
-      cityState: '',
+      city: '',
+      state: '',
       contactLogs: [],
       ...card,
-    });
+    }));
   }, [card.id, initialMode]);
 
   const saveAndClose = useCallback(() => {
-    onSave(draft);
+    const next = normalizeCard({
+      ...draft,
+      cityState: formatCardLocation(draft),
+    });
+    onSave(next);
   }, [draft, onSave]);
 
   useEffect(() => {
     function handleKey(e) {
-      if (e.key === 'Escape' && !showLogCreate && !readLog) {
+      if (e.key === 'Escape' && !showLogCreate && !readLog && !showMove) {
         e.stopPropagation();
         if (isView) onClose();
         else setMode('view');
@@ -406,14 +548,16 @@ export default function CardModal({
     }
     document.addEventListener('keydown', handleKey, true);
     return () => document.removeEventListener('keydown', handleKey, true);
-  }, [isView, onClose, showLogCreate, readLog]);
+  }, [isView, onClose, showLogCreate, readLog, showMove]);
 
   function set(field, value) {
     setDraft((d) => ({ ...d, [field]: value }));
   }
 
-  function setTag(key, value) {
-    setDraft((d) => ({ ...d, tags: { ...d.tags, [key]: value } }));
+  function patch(next) {
+    const normalized = normalizeCard({ ...next, cityState: formatCardLocation(next) });
+    setDraft(normalized);
+    onPatch?.(normalized);
   }
 
   function handleOverlayClick(e) {
@@ -423,20 +567,25 @@ export default function CardModal({
   }
 
   function addContactLog(log) {
-    const next = { ...draft, contactLogs: [...(draft.contactLogs || []), log] };
+    const next = normalizeCard({ ...draft, contactLogs: [...(draft.contactLogs || []), log] });
     setDraft(next);
     setShowLogCreate(false);
-    if (isView) (onPatch || onSave)(next);
+    if (isView) onPatch?.(next);
   }
 
   function removeContactLog(logId) {
-    const next = (draft.contactLogs || []).filter((l) => l.id !== logId);
-    set('contactLogs', next);
+    set('contactLogs', (draft.contactLogs || []).filter((l) => l.id !== logId));
   }
 
-  function handleCreateLogClick() {
-    setShowLogCreate(true);
+  function handleMoveConfirm(toColId) {
+    if (onMoveCard && columnId && toColId !== columnId) {
+      onMoveCard(draft.id, columnId, toColId);
+      onColumnChange?.(toColId);
+    }
+    setShowMove(false);
   }
+
+  const location = formatCardLocation(draft);
 
   return (
     <>
@@ -448,7 +597,19 @@ export default function CardModal({
           aria-label={isView ? 'Visualizar card' : 'Editar card'}
         >
           <div className="modal__header">
-            <span className="modal__header-label">{columnTitle}</span>
+            {onMoveCard && columnId && !isArchivedView ? (
+              <button
+                type="button"
+                className="modal__header-label modal__header-label--clickable"
+                onClick={() => setShowMove(true)}
+                title="Mover card para outra coluna"
+              >
+                {columnTitle}
+                <MaterialIcon name="chevron_right" size={14} />
+              </button>
+            ) : (
+              <span className="modal__header-label">{columnTitle}</span>
+            )}
             <div className="modal__header-actions">
               {isView && onArchive && !isArchivedView && (
                 <button className="icon-btn" onClick={() => onArchive()} title="Arquivar card">
@@ -474,32 +635,38 @@ export default function CardModal({
                 <div className="two-col">
                   {draft.clientName && (
                     <div className="field">
-                      <span className="field__label">Responsável</span>
+                      <span className="field__label">Cliente Responsável</span>
                       <div className="field__value">{draft.clientName}</div>
                     </div>
                   )}
-                  {draft.dueDate && (
-                    <div className="field">
-                      <span className="field__label">Prazo</span>
-                      <div className="field__value">{formatDate(draft.dueDate)}</div>
-                    </div>
-                  )}
+                  <div className="field">
+                    <span className="field__label">Prazo</span>
+                    {canPatch ? (
+                      <input
+                        type="date"
+                        value={draft.dueDate || ''}
+                        onChange={(e) => patch({ ...draft, dueDate: e.target.value || null })}
+                      />
+                    ) : (
+                      <div className="field__value">{draft.dueDate ? formatDate(draft.dueDate) : '—'}</div>
+                    )}
+                  </div>
                 </div>
 
                 <EmailsView emails={draft.emails} />
 
-                {draft.cityState && (
+                {location && (
                   <div className="field">
                     <span className="field__label field__label--icon">
                       <MaterialIcon name="location_on" size={14} />
-                      Cidade / Estado
+                      Local
                     </span>
-                    <div className="field__value">{draft.cityState}</div>
+                    <div className="field__value">{location}</div>
                   </div>
                 )}
 
                 <div className="field">
-                  <span className="field__label">Etapa / Responsável</span>
+                  <span className="field__label">Responsável da etapa</span>
                   <div className="field__value">{OWNER_LABELS[draft.owner]?.text || draft.owner}</div>
                 </div>
 
@@ -512,22 +679,24 @@ export default function CardModal({
 
                 <ListView label="Ajustes feitos" icon="check_circle" items={draft.doneItems} />
                 <ListView label="Ajustes pendentes" icon="hourglass_empty" items={draft.pendingItems} />
-                <ListView label="Checklist de features" icon="checklist" items={draft.checklist} />
-
-                {draft.tags?.totemPrevio && (
-                  <div className="field">
-                    <span className="tag tag--totem tag--totem-icon">
-                      <MaterialIcon name="contrast" size={12} />
-                      Totem prévio ativo
-                    </span>
-                  </div>
+                {canPatch ? (
+                  <ChecklistViewInteractive
+                    label="Checklist de features"
+                    icon="checklist"
+                    items={draft.checklist}
+                    onChange={(v) => patch({ ...draft, checklist: v })}
+                  />
+                ) : (
+                  <ListView label="Checklist de features" icon="checklist" items={draft.checklist} />
                 )}
+
+                <TagsView tags={draft.tags} />
 
                 <hr className="section-divider" />
                 <ContactLogSection
                   logs={draft.contactLogs}
                   isEditing={false}
-                  onAdd={handleCreateLogClick}
+                  onAdd={() => setShowLogCreate(true)}
                   onRemove={removeContactLog}
                   onRead={setReadLog}
                 />
@@ -549,7 +718,7 @@ export default function CardModal({
 
                 <div className="two-col">
                   <div className="field">
-                    <label className="field__label" htmlFor="modal-client-name">Responsável</label>
+                    <label className="field__label" htmlFor="modal-client-name">Cliente Responsável</label>
                     <input
                       id="modal-client-name"
                       type="text"
@@ -570,12 +739,17 @@ export default function CardModal({
                 </div>
 
                 <EmailsEditor emails={draft.emails || []} onChange={(v) => set('emails', v)} />
-                <CidadeEstadoPicker value={draft.cityState || ''} onChange={(v) => set('cityState', v)} />
+                <LocationFields
+                  city={draft.city || ''}
+                  state={draft.state || ''}
+                  onCityChange={(v) => set('city', v)}
+                  onStateChange={(v) => set('state', v)}
+                />
 
                 <hr className="section-divider" />
 
                 <div className="field">
-                  <span className="field__label">Etapa / Responsável</span>
+                  <span className="field__label">Responsável da etapa</span>
                   <div className="owner-select-row">
                     {Object.entries(OWNER_LABELS).map(([key, { text }]) => (
                       <button
@@ -606,25 +780,13 @@ export default function CardModal({
                 <ListEditor label="Checklist de features" icon="checklist" items={draft.checklist} onChange={(v) => set('checklist', v)} />
 
                 <hr className="section-divider" />
-
-                <div className="field">
-                  <span className="field__label">Tags especiais</span>
-                  <label className="checkbox-row checkbox-row--icon">
-                    <input
-                      type="checkbox"
-                      checked={!!draft.tags?.totemPrevio}
-                      onChange={(e) => setTag('totemPrevio', e.target.checked)}
-                    />
-                    <MaterialIcon name="contrast" size={14} />
-                    Totem prévio ativo
-                  </label>
-                </div>
+                <TagsEditor tags={draft.tags} onChange={(v) => set('tags', v)} />
 
                 <hr className="section-divider" />
                 <ContactLogSection
                   logs={draft.contactLogs}
                   isEditing
-                  onAdd={handleCreateLogClick}
+                  onAdd={() => setShowLogCreate(true)}
                   onRemove={removeContactLog}
                   onRead={setReadLog}
                 />
@@ -640,6 +802,12 @@ export default function CardModal({
                   Voltar
                 </button>
                 <div className="modal__footer-actions">
+                  {isArchivedView && onUnarchive && (
+                    <button className="btn btn--sm" onClick={onUnarchive}>
+                      <MaterialIcon name="unarchive" size={14} />
+                      Desarquivar
+                    </button>
+                  )}
                   {isArchivedView && (
                     <button className="btn btn--danger btn--sm" onClick={onDelete}>
                       <MaterialIcon name="delete" size={14} />
@@ -656,7 +824,7 @@ export default function CardModal({
               </>
             ) : (
               <>
-                <button className="btn btn--sm" onClick={() => { setDraft({ ...card, contactLogs: card.contactLogs || [] }); setMode('view'); }}>
+                <button className="btn btn--sm" onClick={() => { setDraft(normalizeCard(card)); setMode('view'); }}>
                   <MaterialIcon name="arrow_back" size={14} />
                   Voltar
                 </button>
@@ -669,11 +837,16 @@ export default function CardModal({
         </div>
       </div>
 
-      {showLogCreate && (
-        <ContactLogCreateModal
-          onSave={addContactLog}
-          onClose={() => setShowLogCreate(false)}
+      {showMove && (
+        <MoveCardModal
+          columns={columns}
+          currentColId={columnId}
+          onConfirm={handleMoveConfirm}
+          onClose={() => setShowMove(false)}
         />
+      )}
+      {showLogCreate && (
+        <ContactLogCreateModal onSave={addContactLog} onClose={() => setShowLogCreate(false)} />
       )}
       {readLog && (
         <ContactLogReadModal log={readLog} onClose={() => setReadLog(null)} />

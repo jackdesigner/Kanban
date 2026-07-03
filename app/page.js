@@ -1,5 +1,10 @@
 import KanbanBoard from '@/components/KanbanBoard';
+import AuthGate from '@/components/AuthGate';
 
 export default function HomePage() {
-  return <KanbanBoard />;
+  return (
+    <AuthGate>
+      <KanbanBoard />
+    </AuthGate>
+  );
 }

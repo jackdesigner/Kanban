@@ -3,7 +3,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { DragDropContext } from '@hello-pangea/dnd';
 import { exportBoardAsJSON } from '@/lib/storage';
-import { createEmptyBoard, createCard } from '@/lib/initialData';
+import { exportBoardReport } from '@/lib/report';
+import { createEmptyBoard, createCard, normalizeCard } from '@/lib/initialData';
 import { supabase } from '@/lib/supabaseClient';
 import { formatDate, daysLabel } from '@/lib/date';
 import { MaterialIcon } from '@/lib/icons';
@@ -12,10 +13,10 @@ import CardModal from './CardModal';
 
 /* ---- Constantes ---- */
 const FILTERS = [
-  { key: 'all', label: 'Todos' },
-  { key: 'eu', label: 'Eu' },
-  { key: 'cliente', label: 'Cliente' },
-  { key: 'interno', label: 'Interno' },
+  { key: 'all', label: 'Todos', shortLabel: 'T' },
+  { key: 'eu', label: 'Eu', shortLabel: 'E' },
+  { key: 'cliente', label: 'Cliente', shortLabel: 'C' },
+  { key: 'interno', label: 'Interno', shortLabel: 'I' },
 ];
 
 const THEMES = [
@@ -31,6 +32,15 @@ const THEME_COLORS = {
   matrix:  ['#00ff41', '#003300', '#000000'],
   mario:   ['#e52521', '#0064ce', '#fbd000'],
 };
+
+function normalizeBoardData(data) {
+  if (!data) return createEmptyBoard();
+  const cards = {};
+  Object.entries(data.cards || {}).forEach(([id, c]) => {
+    cards[id] = normalizeCard(c);
+  });
+  return { ...data, cards };
+}
 
 /* ---- Scroll automático durante drag ---- */
 const SCROLL_ZONE = 100; // px desde as bordas da tela
@@ -82,6 +92,10 @@ export default function KanbanBoard() {
   const [listModalColId, setListModalColId] = useState(null);
   const [listModalMode, setListModalMode] = useState('view');
 
+  const boardRef = useRef(null);
+  const [isMobile, setIsMobile] = useState(false);
+  const [mobileColIdx, setMobileColIdx] = useState(0);
+
   /* Aplica tema no <html> */
   useEffect(() => {
     const saved = localStorage.getItem('kanban-theme') || 'default';
@@ -120,7 +134,7 @@ export default function KanbanBoard() {
         if (error) throw error;
 
         if (data && data.data && Object.keys(data.data).length > 0) {
-          setBoard(data.data);
+          setBoard(normalizeBoardData(data.data));
         } else {
           setBoard(createEmptyBoard());
         }
@@ -138,13 +152,21 @@ export default function KanbanBoard() {
         { event: '*', schema: 'public', table: 'board_state', filter: 'id=eq.1' },
         (payload) => {
           if (payload.new && payload.new.data) {
-            setBoard(payload.new.data);
+            setBoard(normalizeBoardData(payload.new.data));
           }
         }
       )
       .subscribe();
 
     return () => { supabase.removeChannel(subscription); };
+  }, []);
+
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 640px)');
+    const update = () => setIsMobile(mq.matches);
+    update();
+    mq.addEventListener('change', update);
+    return () => mq.removeEventListener('change', update);
   }, []);
 
   /* Salvar no Supabase */
@@ -199,11 +221,20 @@ export default function KanbanBoard() {
     });
   }, []);
 
-  /* Rastreia posição do mouse para o auto-scroll durante drag */
+  /* Rastreia posição do mouse/touch para auto-scroll durante drag */
   useEffect(() => {
-    function track(e) { window.__dragMousePosition = { x: e.clientX, y: e.clientY }; }
+    function track(e) {
+      const t = e.touches?.[0];
+      const x = t ? t.clientX : e.clientX;
+      const y = t ? t.clientY : e.clientY;
+      if (x != null) window.__dragMousePosition = { x, y };
+    }
     window.addEventListener('mousemove', track);
-    return () => window.removeEventListener('mousemove', track);
+    window.addEventListener('touchmove', track, { passive: true });
+    return () => {
+      window.removeEventListener('mousemove', track);
+      window.removeEventListener('touchmove', track);
+    };
   }, []);
 
   /* CRUD de cards */
@@ -269,6 +300,77 @@ export default function KanbanBoard() {
     });
   }
 
+  function handleUnarchiveCard(cardId) {
+    setBoard((prev) => {
+      const card = prev.cards[cardId];
+      const colId = card.archivedFromColId || prev.columnOrder[0];
+      const next = {
+        ...prev,
+        cards: {
+          ...prev.cards,
+          [cardId]: {
+            ...card,
+            archived: false,
+            archivedAt: null,
+          },
+        },
+        columns: {
+          ...prev.columns,
+          [colId]: {
+            ...prev.columns[colId],
+            cardIds: [...prev.columns[colId].cardIds, cardId],
+          },
+        },
+      };
+      persistirNoSupabase(next);
+      return next;
+    });
+  }
+
+  function handleMoveCard(cardId, fromColId, toColId) {
+    if (fromColId === toColId) return;
+    setBoard((prev) => {
+      const fromCol = {
+        ...prev.columns[fromColId],
+        cardIds: prev.columns[fromColId].cardIds.filter((id) => id !== cardId),
+      };
+      const toCol = {
+        ...prev.columns[toColId],
+        cardIds: [...prev.columns[toColId].cardIds, cardId],
+      };
+      const next = {
+        ...prev,
+        columns: { ...prev.columns, [fromColId]: fromCol, [toColId]: toCol },
+        cards: {
+          ...prev.cards,
+          [cardId]: { ...prev.cards[cardId], owner: toCol.owner },
+        },
+      };
+      persistirNoSupabase(next);
+      return next;
+    });
+    setListModalColId(toColId);
+  }
+
+  function scrollToColumn(idx) {
+    const boardEl = boardRef.current;
+    const cols = boardEl?.querySelectorAll('.column');
+    const col = cols?.[idx];
+    if (!col || !boardEl) return;
+    const left = col.offsetLeft - (boardEl.clientWidth - col.clientWidth) / 2;
+    boardEl.scrollTo({ left: Math.max(0, left), behavior: 'smooth' });
+    setMobileColIdx(idx);
+  }
+
+  function goPrevColumn() {
+    scrollToColumn(Math.max(0, mobileColIdx - 1));
+  }
+
+  function goNextColumn() {
+    if (!board) return;
+    scrollToColumn(Math.min(board.columnOrder.length - 1, mobileColIdx + 1));
+  }
+
   function handleReset() {
     setMenuOpen(false);
     if (confirm('Limpar todo o board? Esta ação não pode ser desfeita.')) {
@@ -306,6 +408,45 @@ export default function KanbanBoard() {
 
   const filterCard = (c) => filter === 'all' || c.owner === filter;
 
+  const columnsList = board
+    ? board.columnOrder.map((id) => ({ id, title: board.columns[id].title }))
+    : [];
+
+  const filterChip = (f) => (
+    <button
+      key={f.key}
+      className={`filter-chip${filter === f.key ? ' active' : ''}`}
+      onClick={() => setFilter(f.key)}
+      title={f.label}
+    >
+      <span className="filter-chip__full">{f.label}</span>
+      <span className="filter-chip__short">{f.shortLabel}</span>
+    </button>
+  );
+
+  const mobileColNav = isMobile && viewMode === 'kanban' && !showArchived && (
+    <nav className="mobile-col-nav" aria-label="Navegar colunas">
+      <button
+        type="button"
+        className="mobile-col-nav__btn"
+        onClick={goPrevColumn}
+        disabled={mobileColIdx <= 0}
+      >
+        <MaterialIcon name="chevron_left" size={18} />
+        Anterior
+      </button>
+      <button
+        type="button"
+        className="mobile-col-nav__btn"
+        onClick={goNextColumn}
+        disabled={!board || mobileColIdx >= board.columnOrder.length - 1}
+      >
+        Próximo
+        <MaterialIcon name="chevron_right" size={18} />
+      </button>
+    </nav>
+  );
+
   if (!board) return <div style={{ padding: 32, color: 'var(--text-muted)' }}>Carregando do Supabase…</div>;
 
   /* ---- Topbar ---- */
@@ -340,6 +481,13 @@ export default function KanbanBoard() {
                 >
                   <MaterialIcon name="archive" size={14} />
                   Ver arquivados
+                </button>
+                <button
+                  className="actions-menu__item"
+                  onClick={() => { exportBoardReport(board); setMenuOpen(false); }}
+                >
+                  <MaterialIcon name="description" size={14} />
+                  Exportar relatório
                 </button>
                 <button
                   className="actions-menu__item"
@@ -385,15 +533,7 @@ export default function KanbanBoard() {
       {!showArchived && (
         <div className="topbar__row topbar__row--secondary">
           <div className="filter-group" role="group" aria-label="Filtrar por responsável">
-            {FILTERS.map((f) => (
-              <button
-                key={f.key}
-                className={`filter-chip${filter === f.key ? ' active' : ''}`}
-                onClick={() => setFilter(f.key)}
-              >
-                {f.label}
-              </button>
-            ))}
+            {FILTERS.map(filterChip)}
           </div>
 
           <div className="view-group" role="group" aria-label="Modo de visualização">
@@ -403,7 +543,7 @@ export default function KanbanBoard() {
               title="Kanban"
               aria-label="Kanban"
             >
-              <MaterialIcon name="view_kanban" size={14} />
+              <MaterialIcon name="view_kanban" size={18} />
               <span className="view-btn__label">Kanban</span>
             </button>
             <button
@@ -412,7 +552,7 @@ export default function KanbanBoard() {
               title="Lista"
               aria-label="Lista"
             >
-              <MaterialIcon name="view_list" size={14} />
+              <MaterialIcon name="view_list" size={18} />
               <span className="view-btn__label">Lista</span>
             </button>
             <button
@@ -421,7 +561,7 @@ export default function KanbanBoard() {
               title="Visão geral"
               aria-label="Overview"
             >
-              <MaterialIcon name="grid_view" size={14} />
+              <MaterialIcon name="grid_view" size={18} />
               <span className="view-btn__label">Overview</span>
             </button>
           </div>
@@ -448,15 +588,7 @@ export default function KanbanBoard() {
             </div>
 
             <div className="filter-group archived-view__filters" role="group" aria-label="Filtrar arquivados">
-              {FILTERS.map((f) => (
-                <button
-                  key={f.key}
-                  className={`filter-chip${filter === f.key ? ' active' : ''}`}
-                  onClick={() => setFilter(f.key)}
-                >
-                  {f.label}
-                </button>
-              ))}
+              {FILTERS.map(filterChip)}
             </div>
 
             {filtered.length === 0 && (
@@ -487,11 +619,17 @@ export default function KanbanBoard() {
           {listModalCard && (
             <CardModal
               card={listModalCard}
+              columnId={listModalColId}
               columnTitle={board.columns[listModalColId]?.title || 'Arquivado'}
+              columns={columnsList}
               initialMode="view"
               isArchivedView
               onClose={closeListModal}
               onSave={(updated) => { handleUpdateCard(updated); closeListModal(); }}
+              onUnarchive={() => {
+                handleUnarchiveCard(listModalCard.id);
+                closeListModal();
+              }}
               onDelete={() => {
                 if (confirm('Excluir permanentemente este card?')) {
                   handleDeleteCard(listModalCard.id);
@@ -508,9 +646,9 @@ export default function KanbanBoard() {
   /* ---- VIEW: KANBAN ---- */
   if (viewMode === 'kanban') {
     return (
-      <div className="app">
+      <div className={`app${isMobile ? ' app--kanban-mobile' : ''}`}>
         {topbar}
-        <main className="board">
+        <main className="board" ref={boardRef}>
           <DragDropContext onDragEnd={onDragEnd} onDragUpdate={onDragUpdate}>
             <div className="board__track">
               {board.columnOrder.map((colId) => {
@@ -527,15 +665,18 @@ export default function KanbanBoard() {
                     column={col}
                     cards={cards}
                     allCards={allColCards}
+                    columns={columnsList}
                     onAddCard={handleAddCard}
                     onUpdateCard={handleUpdateCard}
                     onArchiveCard={handleArchiveCard}
+                    onMoveCard={handleMoveCard}
                   />
                 );
               })}
             </div>
           </DragDropContext>
         </main>
+        {mobileColNav}
       </div>
     );
   }
@@ -593,7 +734,9 @@ export default function KanbanBoard() {
           {listModalCard && listModalColId && (
             <CardModal
               card={listModalCard}
+              columnId={listModalColId}
               columnTitle={board.columns[listModalColId]?.title}
+              columns={columnsList}
               initialMode={listModalMode}
               onClose={closeListModal}
               onSave={(updated) => {
@@ -605,6 +748,8 @@ export default function KanbanBoard() {
                 handleArchiveCard(listModalColId, listModalCard.id);
                 closeListModal();
               }}
+              onMoveCard={handleMoveCard}
+              onColumnChange={setListModalColId}
             />
           )}
         </main>
@@ -659,7 +804,9 @@ export default function KanbanBoard() {
           {listModalCard && listModalColId && (
             <CardModal
               card={listModalCard}
+              columnId={listModalColId}
               columnTitle={board.columns[listModalColId]?.title}
+              columns={columnsList}
               initialMode={listModalMode}
               onClose={closeListModal}
               onSave={(updated) => {
@@ -671,6 +818,8 @@ export default function KanbanBoard() {
                 handleArchiveCard(listModalColId, listModalCard.id);
                 closeListModal();
               }}
+              onMoveCard={handleMoveCard}
+              onColumnChange={setListModalColId}
             />
           )}
         </main>

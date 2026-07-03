@@ -13,9 +13,11 @@ export default function KanbanColumn({
   column,
   cards,
   allCards,
+  columns,
   onAddCard,
   onUpdateCard,
   onArchiveCard,
+  onMoveCard,
 }) {
   const [openCardId, setOpenCardId] = useState(null);
   const [modalMode, setModalMode] = useState('view');
@@ -94,7 +96,6 @@ export default function KanbanColumn({
                     <KanbanCard
                       card={card}
                       onClick={() => openCardView(card.id)}
-                      onArchive={() => handleArchive(card.id)}
                     />
                   </div>
                 )}
@@ -112,12 +113,15 @@ export default function KanbanColumn({
       {openCard && (
         <CardModal
           card={openCard}
+          columnId={column.id}
           columnTitle={column.title}
+          columns={columns}
           initialMode={modalMode}
           onClose={() => setOpenCardId(null)}
           onSave={handleSave}
           onPatch={handlePatch}
           onArchive={() => handleArchive(openCard.id)}
+          onMoveCard={onMoveCard}
         />
       )}
     </div>

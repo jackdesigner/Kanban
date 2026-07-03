@@ -1,0 +1,35 @@
+incluir campos no card:
+Responsável: (espaço para nome do cliente responsável) (mostrar primeiro nome na miniatura, ao lado do titulo do card, em tamanho menor e mais clarinho
+e-mails: lugar pra colocar e-mails de contato com botão de atalho pra copiar eles formatados com virgula
+campo cidade estado (pegar de api se possível em dropdown)
+
+estrutura:
+trocar textos descritivos dos cabeçalhos das colunas por um icone de informação (I)
+, mostre essas informações ao hover do mouse no ícone (ícone, emoji não)
+botão novo card imediatamente abaixo do último card na lista, ou em primeiro se a lista estiver vazia
+
+
+
+interação:
+com o card em drag, fazer a tela scrolar quando chegar com o card no canto da tela
+sair do modal do card com "esc"
+sempre salvar informações do card ao sair, independente da forma
+
+visualização:
+botão visualizar kanban em lista
+botão visualizar todo o fluxo dentro da tela, em 2 linhas de 7 colunas
+
+Identidade
+Nome: [Projetos do Jack]
+
+Juntar em menu:
+Botao baixar Json
+botao Limpar
+botão tema (mudar apenas cores) 
+	Botoes com o nome do tema e quadrados das cores usados exemplo "Matrix [] [] []"
+
+	- tema padrão (estrutura de design atual)
+	- tema escuro (ajustar para tema escuro)
+	- tema matriz (ajustar para tema parecido com a tela do filme matrix)
+	- tema mário (esquema de cores do super mário)
+
