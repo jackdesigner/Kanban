@@ -165,6 +165,82 @@
   color-scheme: light;
 }
 
+/* ========== TEMA BEACH ========== */
+[data-theme="beach"] {
+  --bg-app:      #f5f1e8;
+  --bg-topbar:   #ffffff;
+  --bg-col:      #ede8dc;
+  --bg-card:     #ffffff;
+  --bg-modal:    #ffffff;
+  --bg-input:    #ffffff;
+
+  --border:      #e8e4d9;
+  --border-focus:#2c84db;
+
+  --text-primary:   #3d3929;
+  --text-secondary: #87867f;
+  --text-muted:     #a5a49d;
+  --text-on-accent: #ffffff;
+
+  --accent:         #46b8cf;
+  --accent-hover:   #38a8bc;
+  --accent-danger:  #d64545;
+
+  --tag-eu-bg:  #46b8cf; --tag-eu-text: #fff;   --tag-eu-border: #38a8bc;
+  --tag-cli-bg: #fff;    --tag-cli-text:#3d3929;--tag-cli-border:#e8e4d9;
+  --tag-int-bg: #e8e4d9; --tag-int-text:#87867f;--tag-int-border:#d8d4c9;
+
+  --progress-fill: #2c84db;
+  --scrollbar-thumb: #d8d4c9;
+
+  --shadow-drag: 0 6px 18px rgba(61,57,41,0.1);
+  --shadow-menu: 0 8px 24px rgba(61,57,41,0.12);
+
+  --theme-swatch1: #46b8cf;
+  --theme-swatch2: #2c84db;
+  --theme-swatch3: #f5f1e8;
+
+  color-scheme: light;
+}
+
+/* ========== TEMA ABYSS ========== */
+[data-theme="abyss"] {
+  --bg-app:      #1a2138;
+  --bg-topbar:   #232c4a;
+  --bg-col:      #2a3457;
+  --bg-card:     #303b63;
+  --bg-modal:    #303b63;
+  --bg-input:    #1e2745;
+
+  --border:      #3a4568;
+  --border-focus:#2ee6a6;
+
+  --text-primary:   #e8ecf5;
+  --text-secondary: #8a9bc4;
+  --text-muted:     #5c6b94;
+  --text-on-accent: #ffffff;
+
+  --accent:         #3d7ef5;
+  --accent-hover:   #2e6ae0;
+  --accent-danger:  #f5456a;
+
+  --tag-eu-bg:  #3d7ef5; --tag-eu-text: #fff;   --tag-eu-border: #3d7ef5;
+  --tag-cli-bg: #303b63; --tag-cli-text:#8a9bc4;--tag-cli-border:#3a4568;
+  --tag-int-bg: #2a3457; --tag-int-text:#8a9bc4;--tag-int-border:#3a4568;
+
+  --progress-fill: #3d7ef5;
+  --scrollbar-thumb: #3a4568;
+
+  --shadow-drag: 0 6px 24px rgba(0,0,0,0.45);
+  --shadow-menu: 0 8px 32px rgba(0,0,0,0.55);
+
+  --theme-swatch1: #2ee6a6;
+  --theme-swatch2: #3d7ef5;
+  --theme-swatch3: #1a2138;
+
+  color-scheme: dark;
+}
+
 /* ========== BASE ========== */
 * { box-sizing: border-box; }
 html, body, #__next { height: 100%; overflow: hidden; }

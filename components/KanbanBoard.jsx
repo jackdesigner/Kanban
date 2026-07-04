@@ -24,6 +24,8 @@ const THEMES = [
   { key: 'dark',    label: 'Escuro',  swatches: ['--theme-swatch1','--theme-swatch2','--theme-swatch3'] },
   { key: 'matrix',  label: 'Matrix',  swatches: ['--theme-swatch1','--theme-swatch2','--theme-swatch3'] },
   { key: 'mario',   label: 'Mário',   swatches: ['--theme-swatch1','--theme-swatch2','--theme-swatch3'] },
+  { key: 'beach',   label: 'Beach',   swatches: ['--theme-swatch1','--theme-swatch2','--theme-swatch3'] },
+  { key: 'abyss',   label: 'Abyss',   swatches: ['--theme-swatch1','--theme-swatch2','--theme-swatch3'] },
 ];
 
 const THEME_COLORS = {
@@ -31,6 +33,8 @@ const THEME_COLORS = {
   dark:    ['#7c6af5', '#0d0d0f', '#2a2a35'],
   matrix:  ['#00ff41', '#003300', '#000000'],
   mario:   ['#e52521', '#0064ce', '#fbd000'],
+  beach:   ['#46b8cf', '#2c84db', '#f5f1e8'],
+  abyss:   ['#2ee6a6', '#3d7ef5', '#1a2138'],
 };
 
 function normalizeBoardData(data) {
