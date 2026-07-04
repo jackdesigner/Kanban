@@ -571,7 +571,7 @@ export default function KanbanBoard() {
               <span className="view-btn__label">Overview</span>
             </button>
             <button
-              className="view-btn view-btn--profile"
+              className={`view-btn${showProfile ? ' active' : ''}`}
               onClick={() => setShowProfile(true)}
               title="Ver perfil"
               aria-label="Ver perfil"
@@ -585,16 +585,7 @@ export default function KanbanBoard() {
     </header>
   );
 
-  /* ---- VIEW: PERFIL DO OPERADOR ---- */
-  if (showProfile) {
-    return (
-      <OperatorCard
-        board={board}
-        onBack={() => setShowProfile(false)}
-        onPatchCard={handleUpdateCard}
-      />
-    );
-  }
+
 
   /* ---- VIEW: ARQUIVADOS ---- */
   if (showArchived) {
@@ -665,6 +656,13 @@ export default function KanbanBoard() {
             />
           )}
         </main>
+        {showProfile && (
+          <OperatorCard
+            board={board}
+            onClose={() => setShowProfile(false)}
+            onPatchCard={handleUpdateCard}
+          />
+        )}
       </div>
     );
   }
@@ -703,6 +701,13 @@ export default function KanbanBoard() {
           </DragDropContext>
         </main>
         {mobileColNav}
+        {showProfile && (
+          <OperatorCard
+            board={board}
+            onClose={() => setShowProfile(false)}
+            onPatchCard={handleUpdateCard}
+          />
+        )}
       </div>
     );
   }
@@ -779,6 +784,13 @@ export default function KanbanBoard() {
             />
           )}
         </main>
+        {showProfile && (
+          <OperatorCard
+            board={board}
+            onClose={() => setShowProfile(false)}
+            onPatchCard={handleUpdateCard}
+          />
+        )}
       </div>
     );
   }
@@ -849,6 +861,13 @@ export default function KanbanBoard() {
             />
           )}
         </main>
+        {showProfile && (
+          <OperatorCard
+            board={board}
+            onClose={() => setShowProfile(false)}
+            onPatchCard={handleUpdateCard}
+          />
+        )}
       </div>
     );
   }
