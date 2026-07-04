@@ -10,6 +10,7 @@ import { formatDate, daysLabel } from '@/lib/date';
 import { MaterialIcon } from '@/lib/icons';
 import KanbanColumn from './KanbanColumn';
 import CardModal from './CardModal';
+import OperatorCard from './OperatorCard';
 
 /* ---- Constantes ---- */
 const FILTERS = [
@@ -90,6 +91,7 @@ export default function KanbanBoard() {
   const [theme, setTheme] = useState('default');
   const [menuOpen, setMenuOpen] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
   const menuRef = useRef(null);
 
   const [listModalCard, setListModalCard] = useState(null);
@@ -568,11 +570,31 @@ export default function KanbanBoard() {
               <MaterialIcon name="grid_view" size={18} />
               <span className="view-btn__label">Overview</span>
             </button>
+            <button
+              className="view-btn view-btn--profile"
+              onClick={() => setShowProfile(true)}
+              title="Ver perfil"
+              aria-label="Ver perfil"
+            >
+              <MaterialIcon name="badge" size={18} />
+              <span className="view-btn__label">Perfil</span>
+            </button>
           </div>
         </div>
       )}
     </header>
   );
+
+  /* ---- VIEW: PERFIL DO OPERADOR ---- */
+  if (showProfile) {
+    return (
+      <OperatorCard
+        board={board}
+        onBack={() => setShowProfile(false)}
+        onPatchCard={handleUpdateCard}
+      />
+    );
+  }
 
   /* ---- VIEW: ARQUIVADOS ---- */
   if (showArchived) {
