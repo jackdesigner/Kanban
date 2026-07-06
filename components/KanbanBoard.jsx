@@ -84,7 +84,7 @@ function stopAutoScroll() {
 }
 
 /* ---- Componente ---- */
-export default function KanbanBoard() {
+export default function KanbanBoard({ session }) {
   const [board, setBoard] = useState(null);
   const [filter, setFilter] = useState('all');
   const [viewMode, setViewMode] = useState('kanban'); // 'kanban' | 'lista' | 'overview'
@@ -101,6 +101,7 @@ export default function KanbanBoard() {
   const boardRef = useRef(null);
   const [isMobile, setIsMobile] = useState(false);
   const [mobileColIdx, setMobileColIdx] = useState(0);
+  const [boardRowId, setBoardRowId] = useState(null);
 
   /* Aplica tema no <html> */
   useEffect(() => {
@@ -130,19 +131,35 @@ export default function KanbanBoard() {
   /* Carrega do Supabase e assina realtime */
   useEffect(() => {
     async function initBoard() {
+      if (!session?.user?.id) return;
       try {
-        const { data, error } = await supabase
+        let { data, error } = await supabase
           .from('board_state')
-          .select('data')
-          .eq('id', 1)
-          .single();
+          .select('id, data')
+          .eq('user_id', session.user.id)
+          .maybeSingle();
 
         if (error) throw error;
 
-        if (data && data.data && Object.keys(data.data).length > 0) {
-          setBoard(normalizeBoardData(data.data));
-        } else {
-          setBoard(createEmptyBoard());
+        if (!data) {
+          const initialBoard = createEmptyBoard();
+          const tempId = Math.floor(Math.random() * 2147483647);
+          const { data: insertedData, error: insertError } = await supabase
+            .from('board_state')
+            .insert([{ id: tempId, data: initialBoard, user_id: session.user.id }])
+            .select()
+            .single();
+          if (insertError) throw insertError;
+          data = insertedData;
+        }
+
+        if (data) {
+          setBoardRowId(data.id);
+          if (data.data && Object.keys(data.data).length > 0) {
+            setBoard(normalizeBoardData(data.data));
+          } else {
+            setBoard(createEmptyBoard());
+          }
         }
       } catch (err) {
         console.error('Erro ao carregar dados do Supabase:', err);
@@ -150,12 +167,16 @@ export default function KanbanBoard() {
       }
     }
     initBoard();
+  }, [session]);
+
+  useEffect(() => {
+    if (!session?.user?.id || !boardRowId) return;
 
     const subscription = supabase
       .channel('board-updates')
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'board_state', filter: 'id=eq.1' },
+        { event: '*', schema: 'public', table: 'board_state', filter: `id=eq.${boardRowId}` },
         (payload) => {
           if (payload.new && payload.new.data) {
             setBoard(normalizeBoardData(payload.new.data));
@@ -165,7 +186,7 @@ export default function KanbanBoard() {
       .subscribe();
 
     return () => { supabase.removeChannel(subscription); };
-  }, []);
+  }, [boardRowId, session]);
 
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 640px)');
@@ -177,10 +198,11 @@ export default function KanbanBoard() {
 
   /* Salvar no Supabase */
   async function persistirNoSupabase(novoBoard) {
+    if (!session?.user?.id || !boardRowId) return;
     try {
       const { error } = await supabase
         .from('board_state')
-        .upsert({ id: 1, data: novoBoard, updated_at: new Date().toISOString() });
+        .upsert({ id: boardRowId, data: novoBoard, user_id: session.user.id, updated_at: new Date().toISOString() });
       if (error) throw error;
     } catch (err) {
       console.error('Erro ao salvar no Supabase:', err);
@@ -505,6 +527,14 @@ export default function KanbanBoard() {
                 <button className="actions-menu__item actions-menu__item--danger" onClick={handleReset}>
                   <MaterialIcon name="restart_alt" size={14} />
                   Limpar board
+                </button>
+                <div className="actions-menu__divider" />
+                <button
+                  className="actions-menu__item actions-menu__item--danger"
+                  onClick={() => supabase.auth.signOut()}
+                >
+                  <MaterialIcon name="logout" size={14} />
+                  Sair da Conta
                 </button>
 
                 <div className="actions-menu__divider" />
