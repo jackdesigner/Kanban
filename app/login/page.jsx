@@ -4,16 +4,13 @@ import { useState, useTransition } from 'react'
 import { loginAction } from '@/app/actions/auth'
 
 export default function LoginPage() {
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState(null)
   const [isPending, startTransition] = useTransition()
 
-  function handleFormAction(formData: FormData) {
+  function handleFormAction(formData) {
     setError(null)
     startTransition(async () => {
-      // Dispara a action no backend de forma asíncrona
       const result = await loginAction(formData)
-      
-      // Se a action retornar um erro de validação
       if (result?.error) {
         setError(result.error)
       }
