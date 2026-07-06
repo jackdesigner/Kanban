@@ -50,20 +50,39 @@ export default function AuthGate({ children }) {
       return;
     }
 
-    const email = `${username}@seuapp.com`;
+    // 1. Limpeza do username para remover espaços e caracteres invisíveis
+    const cleanUsername = username.trim().replace(/\s+/g, '');
+    const email = `${cleanUsername}@seuapp.com`;
 
     if (isLogin) {
+      // 1. Log exato do e-mail enviado (Diagnóstico)
+      console.log('--- SUPABASE LOGIN ---');
+      console.log('Tentando logar com o email exato:', `"${email}"`);
+      
+      // 2. Usando o cliente Supabase importado e 3. Passando a senha pura digitada
       const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+        email: email,
+        password: password
       });
-      if (error) setError('Credenciais inválidas.');
+      
+      if (error) {
+        // 4. Tratamento e log do erro original
+        console.error('Erro retornado pelo Supabase (Login):', error);
+        setError('Credenciais inválidas. Abra o console (F12) para ver os detalhes.');
+      }
     } else {
+      console.log('--- SUPABASE SIGNUP ---');
+      console.log('Tentando cadastrar com o email exato:', `"${email}"`);
+      
       const { error } = await supabase.auth.signUp({
-        email,
-        password,
+        email: email,
+        password: password
       });
-      if (error) setError(error.message);
+      
+      if (error) {
+        console.error('Erro retornado pelo Supabase (Cadastro):', error);
+        setError(error.message);
+      }
     }
   }
 
