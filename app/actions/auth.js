@@ -13,7 +13,8 @@ export async function loginAction(formData) {
   }
 
   const cleanUsername = username.trim().replace(/\s+/g, '')
-  const email = `${cleanUsername}@seuapp.com`
+  // Se o usuário já digitar o e-mail completo, usamos ele. Se não, forçamos o padrão.
+  const email = cleanUsername.includes('@') ? cleanUsername : `${cleanUsername}@gmail.com`
 
   const supabase = await createClient()
 

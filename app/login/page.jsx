@@ -31,7 +31,7 @@ export default function LoginPage() {
           type="text"
           name="username"
           className="auth-gate__input"
-          placeholder="Usuário"
+          placeholder="E-mail ou Usuário"
           autoFocus
           autoComplete="username"
           style={{ marginBottom: '8px' }}
