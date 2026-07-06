@@ -24,7 +24,7 @@ export async function loginAction(formData) {
 
   if (error) {
     console.error('Erro de Autenticação SSR:', error.message)
-    return { error: 'Credenciais inválidas. Verifique usuário e senha.' }
+    return { error: `Erro do Supabase: ${error.message}` }
   }
 
   revalidatePath('/', 'layout')
