@@ -1,25 +1,11 @@
 'use client'
 
-import { useState, useTransition } from 'react'
 import { loginAction } from '@/app/actions/auth'
 
 export default function LoginPage() {
-  const [error, setError] = useState(null)
-  const [isPending, startTransition] = useTransition()
-
-  function handleFormAction(formData) {
-    setError(null)
-    startTransition(async () => {
-      const result = await loginAction(formData)
-      if (result?.error) {
-        setError(result.error)
-      }
-    })
-  }
-
   return (
     <div className="auth-gate">
-      <form className="auth-gate__panel" action={handleFormAction}>
+      <form className="auth-gate__panel" action={loginAction}>
         <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '16px', color: 'var(--text-muted)' }}>
           <span className="material-symbols-outlined" style={{ fontSize: '28px' }}>lock</span>
         </div>
@@ -44,10 +30,8 @@ export default function LoginPage() {
           autoComplete="current-password"
         />
         
-        {error && <p className="auth-gate__error">{error}</p>}
-        
-        <button type="submit" className="btn btn--primary" disabled={isPending}>
-          {isPending ? 'Validando...' : 'Entrar Seguramente'}
+        <button type="submit" className="btn btn--primary">
+          Entrar Seguramente
         </button>
       </form>
     </div>
